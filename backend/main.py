@@ -160,6 +160,52 @@ async def service_gemini_script_refinement(script: str):
         print(f"Erro Gemini Script: {e}")
         return script
 
+async def upload_image_to_kie(image_path: str, api_key: str) -> str:
+    """Faz upload de uma imagem para a Kie.ai e retorna a URL pública."""
+    try:
+        if not os.path.exists(image_path):
+            return None
+            
+        with open(image_path, "rb") as f:
+            image_data = f.read()
+            
+        image_b64 = base64.b64encode(image_data).decode("utf-8")
+        ext = os.path.splitext(image_path)[1].lower()
+        mime_type = "image/png" if ext == ".png" else "image/jpeg"
+        filename = os.path.basename(image_path)
+        
+        url = "https://kieai.redpandaai.co/api/file-base64-upload"
+        
+        payload = {
+            "base64Data": f"data:{mime_type};base64,{image_b64}",
+            "uploadPath": "images/consistency",
+            "fileName": filename
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        print(f"    📤 Enviando imagem de referência para Kie.ai...")
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(url, json=payload, headers=headers)
+            result = response.json()
+            
+            if result.get("code") == 200:
+                data = result.get("data", {})
+                download_url = data.get("downloadUrl") or data.get("fileUrl") or data.get("url")
+                if download_url:
+                    print(f"    ✅ Upload concluído: {download_url[:50]}...")
+                    return download_url
+            
+            print(f"    ⚠️ Erro no upload: {result}")
+            return None
+            
+    except Exception as e:
+        print(f"    ❌ Erro ao fazer upload da imagem: {e}")
+        return None
+
 async def poll_kie_task_status(task_id: str, api_key: str, timeout: int = 120, interval: int = 2) -> dict:
     """
     Faz polling do status de uma task da API Kie.ai até conclusão.
@@ -179,16 +225,28 @@ async def poll_kie_task_status(task_id: str, api_key: str, timeout: int = 120, i
                 response = await client.get(url, headers=headers)
                 data = response.json()
                 
+                # Debug log
+                # print(f"    [DEBUG] Poll Response: {data}")
+                
                 if data.get("code") != 200:
+                    print(f"    ❌ Erro no polling: {data}")
                     raise Exception(f"Kie.ai API error: {data.get('msg', 'Unknown error')}")
                 
                 task_data = data.get("data", {})
+                state = task_data.get("state", "").lower()
                 status = task_data.get("status", "").lower()
                 
-                if status == "success" or status == "completed":
+                # Combine state and status for compatibility
+                current_state = state or status
+                
+                if current_state and current_state != "pending" and current_state != "waiting" and current_state != "queuing" and current_state != "generating":
+                    print(f"    📋 Estado: {current_state} (Task {task_id})")
+                
+                if current_state in ["success", "completed"]:
                     return task_data
-                elif status == "failed" or status == "error":
-                    raise Exception(f"Task failed: {task_data.get('error', 'Unknown error')}")
+                elif current_state in ["failed", "error", "fail"]:
+                    error_msg = task_data.get("failMsg") or task_data.get("error") or "Unknown error"
+                    raise Exception(f"Task failed: {error_msg}")
                 
                 # Ainda processando, aguardar
                 await asyncio.sleep(interval)
@@ -254,27 +312,23 @@ async def generate_single_image_seedream(scene: Scene, img_config: dict, referen
         
         # Se tiver imagem de referência, incluir no payload
         if reference_image_path and os.path.exists(reference_image_path):
-            # Ler imagem e converter para base64 para incluir na instrução
-            with open(reference_image_path, "rb") as f:
-                image_data = f.read()
-            image_b64 = base64.b64encode(image_data).decode("utf-8")
+            # Primeiro fazer upload da imagem para obter URL válida
+            ref_url = await upload_image_to_kie(reference_image_path, api_key)
             
-            # Detectar tipo de imagem
-            ext = os.path.splitext(reference_image_path)[1].lower()
-            mime_type = "image/png" if ext == ".png" else "image/jpeg"
-            
-            # Adicionar referência na instrução do prompt (Seedream suporta image_urls)
-            # Como precisamos de URL pública, vamos incluir instrução detalhada no prompt
-            character_instruction = (
-                "CRITICAL: Maintain EXACT character consistency with reference. "
-                "Same face shape, hair color/style, skin tone, clothing colors, body proportions. "
-                "The character must be immediately recognizable across all scenes. "
-            )
-            payload["input"]["prompt"] = character_instruction + visual_prompt
-            
-            # Se a API suportar image_urls diretamente, adicionar aqui
-            # Por enquanto, a consistência é via prompt detalhado
-            print(f"    📷 Referência: {os.path.basename(reference_image_path)}")
+            if ref_url:
+                # De acordo com a documentação da Kie.ai, referências vão no campo image_urls
+                payload["input"]["image_urls"] = [ref_url]
+                
+                character_instruction = (
+                    "Maintain EXACT character consistency with the provided image reference. "
+                    "Same face, hair, clothing, and style. "
+                )
+                payload["input"]["prompt"] = character_instruction + visual_prompt
+                
+                print(f"    📷 Referência (URL): {os.path.basename(reference_image_path)}")
+            else:
+                print("    ⚠️ Falha no upload da referência, usando apenas prompt.")
+
         
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -283,34 +337,58 @@ async def generate_single_image_seedream(scene: Scene, img_config: dict, referen
         
         # Criar task
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(f"{base_url}/createTask", json=payload, headers=headers)
-            result = response.json()
-            
-            if result.get("code") != 200:
-                raise Exception(f"Kie.ai API error: {result.get('msg', 'Unknown error')}")
-            
-            task_id = result.get("data", {}).get("taskId")
-            if not task_id:
-                raise Exception("Nenhum taskId retornado pela API")
-            
-            print(f"    📋 Task criada: {task_id}")
+            max_retries = 2
+            for attempt in range(max_retries):
+                try:
+                    response = await client.post(f"{base_url}/createTask", json=payload, headers=headers)
+                    result = response.json()
+                    
+                    if result.get("code") == 200:
+                        task_id = result.get("data", {}).get("taskId")
+                        if task_id:
+                            print(f"    📋 Task criada: {task_id}")
+                            break
+                    
+                    # Se der erro de servidor, tentar novamente uma vez
+                    if "Server exception" in str(result.get("msg", "")) and attempt < max_retries - 1:
+                        print(f"    ⚠️ Erro de servidor Kie.ai (tentativa {attempt+1}), tentando novamente...")
+                        await asyncio.sleep(2)
+                        continue
+                        
+                    raise Exception(f"Kie.ai API error: {result.get('msg', 'Unknown error')}")
+                except (httpx.RequestError, json.JSONDecodeError) as e:
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2)
+                        continue
+                    raise e
+            else:
+                raise Exception("Falha ao criar task após retries")
         
         # Polling até conclusão
         task_result = await poll_kie_task_status(task_id, api_key, timeout, interval)
         
-        # Extrair URL da imagem gerada
-        output = task_result.get("output", {})
-        image_url = output.get("image_url") or output.get("imageUrl") or output.get("url")
+        # Extrair URL do resultJson (padrão Common API) ou output (padrão antigo)
+        image_url = None
+        result_json_str = task_result.get("resultJson")
+        
+        if result_json_str:
+            try:
+                result_data = json.loads(result_json_str)
+                urls = result_data.get("resultUrls") or result_data.get("image_urls")
+                if urls and isinstance(urls, list) and len(urls) > 0:
+                    image_url = urls[0]
+            except:
+                pass
         
         if not image_url:
-            # Tentar encontrar em outros campos
-            if isinstance(output, list) and len(output) > 0:
-                image_url = output[0].get("url") or output[0].get("image_url")
-            elif "images" in output:
-                image_url = output["images"][0] if output["images"] else None
+            output = task_result.get("output", {})
+            if isinstance(output, dict):
+                image_url = output.get("image_url") or output.get("imageUrl") or output.get("url")
+            elif isinstance(output, list) and len(output) > 0:
+                image_url = output[0] if isinstance(output[0], str) else output[0].get("url")
         
         if not image_url:
-            print(f"    ⚠️ Resposta sem URL de imagem: {task_result}")
+            print(f"    ⚠️ Resposta sem URL de imagem. Keys: {list(task_result.keys())}")
             return (scene.id, None)
         
         # Download da imagem
@@ -494,37 +572,25 @@ async def service_generate_images(scenes: List[Scene], reference_image_path: str
     for scene in scenes:
         filepath = None
         
-        # Tentar Seedream primeiro (se configurado)
-        if provider == "seedream":
-            result = await generate_single_image_seedream(scene, {}, reference_image_path)
-            if isinstance(result, tuple):
-                scene_id, filepath = result
-        
-        # Fallback para Nano Banana se Seedream falhou ou não é o provider
-        if not filepath and (provider == "nanobanana" or (provider == "seedream" and not filepath)):
-            if provider == "seedream":
-                print(f"  🔄 Cena {scene.id}: Tentando Nano Banana como fallback...")
-            result = await generate_single_image_nanobanana(scene, {}, reference_image_path)
-            if isinstance(result, tuple):
-                scene_id, filepath = result
-        
-        # Fallback final para Pollinations
-        if not filepath:
-            print(f"  🔄 Cena {scene.id}: Usando Pollinations como fallback final...")
-            result = await generate_single_image_pollinations(scene, img_config, reference_image_path)
-            if isinstance(result, tuple):
-                scene_id, filepath = result
+        # Usar exclusivamente Seedream 4.5
+        result = await generate_single_image_seedream(scene, {}, reference_image_path)
+        if isinstance(result, tuple):
+            scene_id, filepath = result
         
         all_results[scene.id] = filepath
         
         # Delay entre imagens para evitar rate limit
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)
     
     # Ordenar resultados pela ordem original das cenas
     image_paths = [all_results.get(scene.id) for scene in scenes]
     
     success_count = sum(1 for p in image_paths if p)
     print(f"[Orchestrator] {success_count}/{len(scenes)} imagens geradas com sucesso")
+    
+    if success_count == 0:
+        print("  🚨 CRÍTICO: Nenhuma imagem foi gerada. Interrompendo processo.")
+        raise Exception("Falha na geração de imagens (Kie.ai). Processo interrompido para economizar créditos.")
     
     return image_paths
 

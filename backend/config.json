@@ -15,8 +15,8 @@
                     "quality": "basic",
                     "aspect_ratio": "16:9",
                     "base_url": "https://api.kie.ai/api/v1/jobs",
-                    "polling_interval_seconds": 2,
-                    "timeout_seconds": 120
+                    "polling_interval_seconds": 3,
+                    "timeout_seconds": 300
                 },
                 "pollinations": {
                     "base_url": "https://gen.pollinations.ai/image/",
