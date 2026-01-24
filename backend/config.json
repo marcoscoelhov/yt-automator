@@ -1,0 +1,137 @@
+{
+    "app": {
+        "name": "VSL Generator",
+        "version": "1.0.0",
+        "description": "Gerador de Video Sales Letters com IA"
+    },
+    "services": {
+        "image_generation": {
+            "provider": "pollinations",
+            "enabled": true,
+            "options": {
+                "pollinations": {
+                    "base_url": "https://gen.pollinations.ai/image/",
+                    "model": "nanobanana",
+                    "api_key_env": "POLLINATIONS_API_KEY",
+                    "width": 1280,
+                    "height": 720,
+                    "nologo": true
+                },
+                "imagen3": {
+                    "model": "imagen-3.0-generate-002",
+                    "aspect_ratio": "16:9",
+                    "safety_filter_level": "block_only_high",
+                    "person_generation": "allow_adult"
+                },
+                "dalle": {
+                    "api_key_env": "OPENAI_API_KEY",
+                    "model": "dall-e-3",
+                    "size": "1792x1024"
+                }
+            }
+        },
+        "text_to_speech": {
+            "provider": "gemini",
+            "enabled": true,
+            "options": {
+                "gemini": {
+                    "model": "gemini-2.0-flash-exp",
+                    "voices": {
+                        "voice_1": "Puck",
+                        "voice_2": "Kore",
+                        "Puck": "Puck",
+                        "Charon": "Charon",
+                        "Fenrir": "Fenrir",
+                        "Aoede": "Aoede",
+                        "Kore": "Kore"
+                    },
+                    "default_voice": "Puck"
+                },
+                "edge_tts": {
+                    "voices": {
+                        "voice_1": "pt-BR-AntonioNeural",
+                        "voice_2": "pt-BR-FranciscaNeural",
+                        "Charon": "pt-BR-FabioNeural",
+                        "Kore": "pt-BR-ThalitaNeural",
+                        "Puck": "pt-BR-AntonioNeural",
+                        "Fenrir": "pt-BR-AntonioNeural",
+                        "Aoede": "pt-BR-FranciscaNeural"
+                    },
+                    "default_voice": "pt-BR-AntonioNeural"
+                },
+                "elevenlabs": {
+                    "api_key_env": "ELEVENLABS_API_KEY",
+                    "model": "eleven_multilingual_v2",
+                    "voices": {}
+                },
+                "google_tts": {
+                    "api_key_env": "GOOGLE_API_KEY",
+                    "language": "pt-BR"
+                }
+            }
+        },
+        "script_refinement": {
+            "provider": "gemini",
+            "enabled": false,
+            "options": {
+                "gemini": {
+                    "api_key_env": "GOOGLE_API_KEY",
+                    "model": "gemini-1.5-flash"
+                },
+                "openai": {
+                    "api_key_env": "OPENAI_API_KEY",
+                    "model": "gpt-4o-mini"
+                }
+            }
+        },
+        "video_rendering": {
+            "provider": "moviepy",
+            "enabled": true,
+            "options": {
+                "moviepy": {
+                    "fps": 24,
+                    "codec": "libx264",
+                    "audio_codec": "aac",
+                    "preset": "ultrafast",
+                    "output_height": 720
+                },
+                "ffmpeg": {
+                    "path": "ffmpeg",
+                    "preset": "fast"
+                }
+            }
+        }
+    },
+    "transitions": {
+        "zoom_in": {
+            "enabled": true,
+            "scale_start": 1.0,
+            "scale_end": 1.15
+        },
+        "zoom_out": {
+            "enabled": true,
+            "scale_start": 1.15,
+            "scale_end": 1.0
+        },
+        "crossfade": {
+            "enabled": true,
+            "duration_seconds": 0.5
+        },
+        "cut": {
+            "enabled": true
+        }
+    },
+    "output": {
+        "static_dir": "static",
+        "temp_dir": "temp",
+        "filename_prefix": "vsl_final",
+        "base_url": "http://localhost:8000/static/"
+    },
+    "server": {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "cors_origins": [
+            "*"
+        ]
+    }
+}

@@ -1,0 +1,258 @@
+[
+    {
+        "id": 1,
+        "texto_narracao": "Existe um número específico que muda completamente a forma como você vive, decide e reage financeiramente.",
+        "prompt_visual": "CENA 01\nPOSITIVE PROMPT:\n16:9 frame, white background only, clean flat Family Guy cartoon style, bold outlines, flat colors.\nUse the attached character reference as the main character, chest-up, centered.\nCharacter thoughtful, one eyebrow slightly raised, hand on chin.\nA large simple question mark floating above his head, minimal composition, lots of negative space.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 5,
+        "tipo_transicao": "zoom_in",
+        "style_instructions": "Style: curioso, misterioso, mentor financeiro calmo; Pacing: médio, pausa curta no final; Accent: pt-BR neutro; Delivery: voz próxima e confiante, sem pressa."
+    },
+    {
+        "id": 2,
+        "texto_narracao": "Não é quando você fica rico. Não é quando seu salário dobra. E não é quando você compra algo caro.",
+        "prompt_visual": "CENA 02\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference, chest-up, centered.\nCharacter calmly shaking head “no”.\nThree simple flat icons floating beside him: money bag, paycheck, new car, each with a red X over it, minimal layout.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 6,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: firme e certeiro, quebra de crença; Pacing: médio-rápido com micro-pausas; Accent: pt-BR neutro; Delivery: ênfase em 'Não é', sem agressividade."
+    },
+    {
+        "id": 3,
+        "texto_narracao": "A Regra dos R$20.000.",
+        "prompt_visual": "CENA 03\nPOSITIVE PROMPT:\n16:9 frame, white background only, clean flat Family Guy cartoon style, bold outlines, flat colors.\nLarge flat text in the center: \"R$20.000\" in dark green, very large.\nUse the attached character reference standing beside the number, pointing at it, serious calm expression, minimal composition.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 4,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: revelação curta e impactante; Pacing: lento; Accent: pt-BR neutro; Delivery: enfatize 'vinte mil', pausa depois."
+    },
+    {
+        "id": 4,
+        "texto_narracao": "Você já percebeu que existe um tipo de preocupação que nunca some? Mesmo quando você está empregado. Mesmo quando o salário cai certinho. Mesmo quando, teoricamente, “está tudo bem”.",
+        "prompt_visual": "CENA 04\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference seated at a desk, posture tense, worried expression.\nOn the desk: a simple paycheck paper labeled \"SALÁRIO OK\" and a calendar with a checkmark.\nMinimal composition, clean spacing.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 7,
+        "tipo_transicao": "crossfade",
+        "style_instructions": "Style: reflexivo e íntimo, pergunta retórica; Pacing: médio com pausas curtas após cada 'Mesmo quando'; Accent: pt-BR neutro; Delivery: tom de conversa, sem dramatizar."
+    },
+    {
+        "id": 5,
+        "texto_narracao": "É aquela sensação constante de que qualquer coisa fora do script pode virar um problema enorme. O carro. A geladeira. Uma conta inesperada. Uma demissão.",
+        "prompt_visual": "CENA 05\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference in the center, stressed but controlled.\nAround him, four small simple icons/scenes: car with warning light, refrigerator with crack, a bill labeled \"CONTA\", a letter labeled \"DEMISSÃO\".\nAll elements minimal, evenly spaced, clean layout.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 7,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: tensão controlada; Pacing: médio, lista com pausas bem marcadas; Accent: pt-BR neutro; Delivery: tom realista, sem pânico."
+    },
+    {
+        "id": 6,
+        "texto_narracao": "Isso não é falta de planejamento. É falta de margem.",
+        "prompt_visual": "CENA 06\nPOSITIVE PROMPT:\n16:9 frame, white background only, clean flat Family Guy cartoon style, bold outlines, flat colors.\nUse the attached character reference standing on a thin tightrope line, no safety net, lots of white space below.\nArms slightly raised for balance, cautious tense expression, minimal composition.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 5,
+        "tipo_transicao": "zoom_in",
+        "style_instructions": "Style: diagnóstico direto; Pacing: lento-médio; Accent: pt-BR neutro; Delivery: ênfase em 'margem', pausa final."
+    },
+    {
+        "id": 7,
+        "texto_narracao": "Quando você não tem reserva, seu cérebro entra automaticamente em modo sobrevivência. Isso não é força de expressão. É biologia.",
+        "prompt_visual": "CENA 07\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference, chest-up close, tense posture, eyes alert.\nAbove his head: a simple flat brain icon labeled \"SOBREVIVÊNCIA\", minimal composition.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 7,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: explicativo com autoridade; Pacing: médio; Accent: pt-BR neutro; Delivery: destaque 'modo sobrevivência' e 'biologia' com pausas curtas."
+    },
+    {
+        "id": 8,
+        "texto_narracao": "Seu cérebro passa a tomar decisões pensando apenas no curto prazo. No alívio imediato. No menor risco agora.",
+        "prompt_visual": "CENA 08\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference reaching quickly for a small band-aid labeled \"ALÍVIO AGORA\".\nOn the other side, a simple folder labeled \"FUTURO\" placed farther away.\nCharacter looks rushed and tired, minimal layout, clean spacing.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 7,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: didático e incisivo; Pacing: médio com pausas curtas nas frases fragmentadas; Accent: pt-BR neutro; Delivery: ênfase em 'curto prazo' e 'agora'."
+    },
+    {
+        "id": 9,
+        "texto_narracao": "Você aceita empregos ruins porque não pode errar. Permanece em ambientes tóxicos porque sair parece perigoso demais.",
+        "prompt_visual": "CENA 09\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference shaking hands reluctantly with a boss figure (second character).\nMain character slightly hunched, uncomfortable expression.\nBoss character taller, neutral face, minimal detail, clean composition.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 7,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: sério e empático; Pacing: médio-lento; Accent: pt-BR neutro; Delivery: tom humano, sem julgamento, pausa entre as duas frases."
+    },
+    {
+        "id": 10,
+        "texto_narracao": "Gasta mal não porque quer, mas porque está mentalmente exausto. Planejar o futuro, nesse estado, é como tentar organizar a casa enquanto ela está pegando fogo.",
+        "prompt_visual": "CENA 10\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference holding papers, looking overwhelmed.\nBehind him: a simple house outline with small symbolic flames, minimal and clean (not dramatic).\nLots of negative space.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 8,
+        "tipo_transicao": "zoom_in",
+        "style_instructions": "Style: empatia + metáfora forte; Pacing: médio, desacelere na metáfora; Accent: pt-BR neutro; Delivery: ênfase em 'mentalmente exausto', pausa antes de 'é como'."
+    },
+    {
+        "id": 11,
+        "texto_narracao": "Agora presta atenção no que acontece quando você alcança R$20.000 guardados. Não investidos em nada mirabolante. Não apostados em risco. Guardados.",
+        "prompt_visual": "CENA 11\nPOSITIVE PROMPT:\n16:9 frame, white background only, clean flat Family Guy cartoon style, bold outlines, flat colors.\nUse the attached character reference holding a simple locked box labeled \"R$20.000\".\nExpression calm, shoulders relaxed, small relief smile, minimal composition.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 8,
+        "tipo_transicao": "crossfade",
+        "style_instructions": "Style: virada, tom de 'agora vem'; Pacing: médio com pausas; Accent: pt-BR neutro; Delivery: enfatize a última palavra 'Guardados' e pause."
+    },
+    {
+        "id": 12,
+        "texto_narracao": "Algo muda silenciosamente. Você não vira outra pessoa. Você não fica eufórico. Você simplesmente respira.",
+        "prompt_visual": "CENA 12\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nClose-up of the attached character reference with eyes closed, breathing deeply.\nA small simple air puff symbol near the mouth, peaceful relieved expression, minimal.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 7,
+        "tipo_transicao": "crossfade",
+        "style_instructions": "Style: alívio e leveza; Pacing: lento; Accent: pt-BR neutro; Delivery: pausas entre frases, como um suspiro tranquilo."
+    },
+    {
+        "id": 13,
+        "texto_narracao": "Um problema no carro deixa de ser uma tragédia. Uma conversa difícil no trabalho deixa de ser um risco existencial. Uma decisão importante deixa de ser tomada no desespero. E isso muda tudo.",
+        "prompt_visual": "CENA 13\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference calm and confident in the center.\nAround him, three simple icons: car repair wrench, speech bubble with an exclamation mark, a checklist labeled \"DECISÃO\".\nAll icons minimal and evenly spaced, clean layout, lots of negative space.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 8,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: segurança e clareza; Pacing: médio, pausas nas três frases; Accent: pt-BR neutro; Delivery: leve crescendo e ênfase final em 'muda tudo'."
+    },
+    {
+        "id": 14,
+        "texto_narracao": "R$20.000, para a maioria das pessoas, representa algo entre três e seis meses de custo de vida. E esse intervalo cria algo extremamente valioso. Tempo.",
+        "prompt_visual": "CENA 14\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference standing relaxed.\nBehind him: a large flat calendar showing 6 months, with 3 to 6 months highlighted, minimal details, clean composition.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 8,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: informativo e convincente; Pacing: médio-lento; Accent: pt-BR neutro; Delivery: desacelere em 'três e seis meses' e pausa antes de 'Tempo'."
+    },
+    {
+        "id": 15,
+        "texto_narracao": "Tempo para pensar. Tempo para decidir melhor. Tempo para não aceitar qualquer coisa.",
+        "prompt_visual": "CENA 15\nPOSITIVE PROMPT:\n16:9 frame, white background only, clean flat Family Guy cartoon style, bold outlines, flat colors.\nUse the attached character reference looking calm.\nThree large simple words stacked vertically: \"PENSAR\", \"DECIDIR\", \"ESCOLHER\" in dark green, bold sans-serif.\nMinimal composition, high readability, lots of negative space.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 6,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: mantra, cadência; Pacing: lento com pausas iguais; Accent: pt-BR neutro; Delivery: repetição ritmada, firme e calma."
+    },
+    {
+        "id": 16,
+        "texto_narracao": "Estudos em psicologia financeira mostram que pessoas com reserva de emergência têm níveis significativamente menores de cortisol, o hormônio do estresse.",
+        "prompt_visual": "CENA 16\nPOSITIVE PROMPT:\n16:9 frame, white background only, clean flat Family Guy cartoon style, bold outlines, flat colors.\nA simple flat brain icon with the word \"CORTISOL\" above it.\nA large downward arrow next to it, showing decrease.\nUse the attached character reference beside it, calm and relieved, minimal layout.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 6,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: científico acessível; Pacing: médio-lento; Accent: pt-BR neutro; Delivery: pronúncia clara, destaque 'cortisol' com pausa curta."
+    },
+    {
+        "id": 17,
+        "texto_narracao": "Menos estresse significa decisões melhores. Decisões melhores evitam erros caros. Erros evitados constroem patrimônio sem você perceber. Isso não é motivação. É química cerebral.",
+        "prompt_visual": "CENA 17\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nA simple 3-step flow with arrows: \"MENOS ESTRESSE\" -> \"MELHORES DECISÕES\" -> \"MENOS ERROS\" -> \"PATRIMÔNIO\".\nUse the attached character reference pointing at the flow, calm confident expression.\nMinimal infographic, high readability, lots of negative space.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 9,
+        "tipo_transicao": "zoom_in",
+        "style_instructions": "Style: lógica em degraus + impacto final; Pacing: médio com pausas; Accent: pt-BR neutro; Delivery: aumente firmeza em 'química cerebral'."
+    },
+    {
+        "id": 18,
+        "texto_narracao": "Pensa na sua vida financeira como empurrar uma pedra enorme morro acima. No começo, você faz força. Sofre. Avança pouco. Questiona se vale a pena.",
+        "prompt_visual": "CENA 18\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference pushing a large round stone uphill.\nThe stone is mid-hill, character struggling but not exaggerated.\nMinimal hill shape, lots of white space.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 9,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: storytelling envolvente; Pacing: médio, pausas curtas em 'Sofre. Avança pouco.'; Accent: pt-BR neutro; Delivery: tom narrativo."
+    },
+    {
+        "id": 19,
+        "texto_narracao": "R$20.000 é o ponto em que essa pedra finalmente passa do topo. Depois disso, a gravidade começa a ajudar.",
+        "prompt_visual": "CENA 19\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference next to the stone as it crosses the top of the hill.\nThe stone is just starting to roll down the other side.\nCharacter expression: relief and disbelief (subtle, not exaggerated), minimal composition.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 7,
+        "tipo_transicao": "zoom_out",
+        "style_instructions": "Style: virada positiva; Pacing: médio-lento; Accent: pt-BR neutro; Delivery: ênfase em 'passa do topo' e tom mais leve em 'ajudar'."
+    },
+    {
+        "id": 20,
+        "texto_narracao": "Mas aqui está o detalhe mais importante. A Regra dos R$20.000 não é só matemática. É identidade.",
+        "prompt_visual": "CENA 20\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference standing upright, arms crossed, calm confident expression.\nA simple mirror silhouette behind him showing his reflection (minimal detail), clean composition.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 7,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: autoridade, ponto-chave; Pacing: lento; Accent: pt-BR neutro; Delivery: pausa após 'mais importante' e ênfase em 'identidade'."
+    },
+    {
+        "id": 21,
+        "texto_narracao": "Para chegar nesse valor, você precisou controlar impulsos. Dizer não para algumas coisas. Ser consistente por meses, talvez anos.",
+        "prompt_visual": "CENA 21\nPOSITIVE PROMPT:\n16:9 frame, white background only, clean flat Family Guy cartoon style, bold outlines, flat colors.\nUse the attached character reference holding up a hand in a calm \"stop\" gesture.\nNext to him: three small icons with simple labels: \"IMPULSOS\", \"DIZER NÃO\", \"CONSISTÊNCIA\".\nMinimal composition, clean spacing, lots of negative space.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 9,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: mentor exigente, sem agressividade; Pacing: médio; Accent: pt-BR neutro; Delivery: pausas curtas na lista, tom de disciplina."
+    },
+    {
+        "id": 22,
+        "texto_narracao": "E nesse processo, algo fundamental aconteceu. Você provou para si mesmo que consegue controlar o dinheiro, em vez de ser controlado por ele.",
+        "prompt_visual": "CENA 22\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference holding a simple leash tied to a money bag icon, showing control (symbolic, minimal).\nCharacter expression calm and in control, not aggressive.\nMinimal composition, clean spacing.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 9,
+        "tipo_transicao": "zoom_in",
+        "style_instructions": "Style: reconhecimento e força interior; Pacing: médio-lento; Accent: pt-BR neutro; Delivery: tom mais quente, ênfase em 'provou' e 'controlar'."
+    },
+    {
+        "id": 23,
+        "texto_narracao": "E aqui entra uma virada silenciosa que quase ninguém percebe. Quando você tem R$20.000 guardados, você ganha algo que eu chamo de dinheiro de caminhada. Dinheiro que te permite levantar da mesa se o jogo estiver ruim.",
+        "prompt_visual": "CENA 23\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference calmly standing up from a simple table.\nChair slightly pushed back.\nOn the table: a single small chip/token left behind.\nExpression calm clarity, not aggressive, minimal composition.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 10,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: segredo revelado, tom levemente conspiratório; Pacing: médio, pausa antes de 'dinheiro de caminhada'; Accent: pt-BR neutro; Delivery: destaque 'dinheiro de caminhada' e 'levantar da mesa'."
+    },
+    {
+        "id": 24,
+        "texto_narracao": "Você não precisa pedir demissão. Só o fato de poder sair muda tudo. Você negocia melhor. Aceita menos desrespeito. Escolhe com mais calma.",
+        "prompt_visual": "CENA 24\nPOSITIVE PROMPT:\n16:9 frame, white background only, clean flat Family Guy cartoon style, bold outlines, flat colors.\nUse the attached character reference with a calm confident posture, one hand pointing to a door icon labeled \"SAÍDA\".\nNext to it: three bold words stacked: \"NEGOCIAR\", \"RESPEITO\", \"CALMA\".\nMinimal layout, high readability, lots of negative space.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 10,
+        "tipo_transicao": "zoom_in",
+        "style_instructions": "Style: liberdade e segurança; Pacing: médio, pausas curtas nas frases finais; Accent: pt-BR neutro; Delivery: calmo e confiante."
+    },
+    {
+        "id": 25,
+        "texto_narracao": "Pessoas sem reserva negociam com medo. Pessoas com reserva negociam com clareza. E isso impacta diretamente sua carreira, sua renda e sua qualidade de vida.",
+        "prompt_visual": "CENA 25\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nSplit-screen minimal composition.\nLeft side: the attached character reference looking worried, small label \"MEDO\".\nRight side: the same character looking calm and clear, small label \"CLAREZA\".\nClean divider line in the middle, high readability.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 10,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: contraste claro; Pacing: médio; Accent: pt-BR neutro; Delivery: ênfase em 'medo' vs 'clareza', leve crescendo no final."
+    },
+    {
+        "id": 26,
+        "texto_narracao": "Agora deixa eu te alertar sobre o erro clássico que destrói tudo isso. Muita gente chega nos R$20.000 e decide se recompensar. Troca de carro. Aumenta o padrão fixo. Faz uma viagem cara.",
+        "prompt_visual": "CENA 26\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference holding one hand up in a calm warning gesture.\nTo the side: three icons with red X: car, monthly bill/house, suitcase/travel.\nMinimal layout, clean spacing.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 11,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: alerta, mentor firme; Pacing: médio com pausas na lista; Accent: pt-BR neutro; Delivery: sério, sem drama, destaque 'erro clássico'."
+    },
+    {
+        "id": 27,
+        "texto_narracao": "Não faça isso. R$20.000 não é um prêmio. É uma fundação. Você não constrói o segundo andar antes da base estar sólida.",
+        "prompt_visual": "CENA 27\nPOSITIVE PROMPT:\n16:9 frame, white background only, clean flat Family Guy cartoon style, bold outlines, flat colors.\nUse the attached character reference pointing at a simple house foundation outline labeled \"FUNDAÇÃO\".\nAbove it: a small second floor outline floating with a red X over it (symbolic).\nMinimal composition, high readability.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 10,
+        "tipo_transicao": "zoom_in",
+        "style_instructions": "Style: comando curto + explicação; Pacing: lento no 'Não faça isso', depois médio; Accent: pt-BR neutro; Delivery: ênfase em 'fundação'."
+    },
+    {
+        "id": 28,
+        "texto_narracao": "Esse dinheiro existe para te proteger de decisões ruins. Não para financiar decisões emocionais.",
+        "prompt_visual": "CENA 28\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference holding a simple shield icon labeled \"PROTEÇÃO\".\nNext to it: a heart icon labeled \"EMOÇÃO\" with a red X over it.\nMinimal composition, clean spacing.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 9,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: orientação madura; Pacing: médio-lento; Accent: pt-BR neutro; Delivery: ênfase em 'proteger' e 'emocionais', pausa final."
+    },
+    {
+        "id": 29,
+        "texto_narracao": "A verdadeira função da Regra dos R$20.000 é simples. Te tirar da posição mais perigosa possível. A posição de alguém que não pode errar.",
+        "prompt_visual": "CENA 29\nPOSITIVE PROMPT:\n16:9 frame, white background only, clean flat Family Guy cartoon style, bold outlines, flat colors.\nUse the attached character reference standing on a small marked spot on the ground labeled \"NÃO POSSO ERRAR\".\nA bold arrow points away to an open space labeled \"MARGEM\".\nMinimal composition, high readability, lots of negative space.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 10,
+        "tipo_transicao": "zoom_in",
+        "style_instructions": "Style: diagnóstico forte; Pacing: lento com pausas; Accent: pt-BR neutro; Delivery: destaque 'mais perigosa' e 'não pode errar'."
+    },
+    {
+        "id": 30,
+        "texto_narracao": "Porque quem não pode errar nunca cresce. Só sobrevive.",
+        "prompt_visual": "CENA 30\nPOSITIVE PROMPT:\n16:9 frame, white background only, Family Guy flat cartoon style, bold outlines, flat colors.\nUse the attached character reference on the left holding a small sign \"SOBREVIVER\".\nOn the right, a tall arrow labeled \"CRESCER\" is shown, with a red X blocking the path from the left to the right (symbolic barrier).\nMinimal composition, high readability.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 7,
+        "tipo_transicao": "cut",
+        "style_instructions": "Style: frase de impacto; Pacing: lento; Accent: pt-BR neutro; Delivery: pausa longa entre 'cresce' e 'Só sobrevive'."
+    },
+    {
+        "id": 31,
+        "texto_narracao": "O verdadeiro começo da vida financeira não é quando você ganha mais. É quando você para de viver com medo.",
+        "prompt_visual": "CENA 31\nPOSITIVE PROMPT:\n16:9 frame, white background only, clean flat Family Guy cartoon style, bold outlines, flat colors.\nUse the attached character reference stepping away from a small cloud icon labeled \"MEDO\".\nAhead of him: a simple path line labeled \"COMEÇO\".\nExpression calm and relieved, minimal composition.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 10,
+        "tipo_transicao": "crossfade",
+        "style_instructions": "Style: inspirador e sereno; Pacing: médio-lento; Accent: pt-BR neutro; Delivery: tom mais quente, ênfase em 'parar de viver com medo'."
+    },
+    {
+        "id": 32,
+        "texto_narracao": "E para a maioria das pessoas, isso começa exatamente aqui. Com R$20.000 bem guardados.",
+        "prompt_visual": "CENA 32\nPOSITIVE PROMPT:\n16:9 frame, white background only, clean flat Family Guy cartoon style, bold outlines, flat colors.\nUse the attached character reference holding a simple locked box labeled \"R$20.000\" close to his chest.\nA bold small caption above: \"COMEÇA AQUI\".\nExpression grounded and confident, minimal composition, lots of negative space.\n\nNEGATIVE PROMPT:\nno 3D, no realistic style, no semi-realistic illustration, no gradients, no lighting effects, no shadows, no busy background, no colored background, no patterns, no textures, no exaggerated cartoon faces, no screaming, no angry expression, no extra characters, no blur, no noise, no watermark, no logo, no cinematic lighting",
+        "duracao_estimada": 9,
+        "tipo_transicao": "crossfade",
+        "style_instructions": "Style: fechamento com convicção calma; Pacing: lento; Accent: pt-BR neutro; Delivery: pausa antes de 'Com R$20.000', finalize com firmeza e serenidade."
+    }
+]
