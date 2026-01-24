@@ -142,5 +142,11 @@
         "cors_origins": [
             "*"
         ]
+    },
+    "pricing": {
+        "image_unit_cost_usd": 0.015,
+        "tts_unit_cost_usd_per_1k_chars": 0.00,
+        "video_render_cost_usd": 0.00,
+        "currency": "USD"
     }
 }

@@ -272,7 +272,7 @@ async def upload_image_for_kie(image_path: str, api_key: str) -> str:
     return image_path  # Será processado na função de geração
 
 
-async def generate_single_image_seedream(scene: Scene, img_config: dict, reference_image_path: str = None) -> tuple:
+async def generate_single_image_seedream(scene: Scene, img_config: dict, reference_image_path: str = None, pre_uploaded_ref_url: str = None) -> tuple:
     """
     Gera uma única imagem com Kie.ai Seedream 4.5 API.
     Suporta imagem de referência para consistência de personagem.
@@ -310,22 +310,29 @@ async def generate_single_image_seedream(scene: Scene, img_config: dict, referen
             }
         }
         
-        # Se tiver imagem de referência, incluir no payload
-        if reference_image_path and os.path.exists(reference_image_path):
-            # Primeiro fazer upload da imagem para obter URL válida
+        # Se tiver imagem de referência
+        if pre_uploaded_ref_url:
+            # Usar URL já carregada (Otimização para múltiplas cenas)
+            payload["input"]["image_urls"] = [pre_uploaded_ref_url]
+            character_instruction = (
+                "Maintain EXACT character consistency with the provided image reference. "
+                "Same face, hair, clothing, and style. "
+            )
+            payload["input"]["prompt"] = character_instruction + visual_prompt
+            print(f"    📷 Referência (URL Cache): {pre_uploaded_ref_url[:30]}...")
+            
+        elif reference_image_path and os.path.exists(reference_image_path):
+            # Primeiro fazer upload da imagem para obter URL válida (Fallback local)
             ref_url = await upload_image_to_kie(reference_image_path, api_key)
             
             if ref_url:
-                # De acordo com a documentação da Kie.ai, referências vão no campo image_urls
                 payload["input"]["image_urls"] = [ref_url]
-                
                 character_instruction = (
                     "Maintain EXACT character consistency with the provided image reference. "
                     "Same face, hair, clothing, and style. "
                 )
                 payload["input"]["prompt"] = character_instruction + visual_prompt
-                
-                print(f"    📷 Referência (URL): {os.path.basename(reference_image_path)}")
+                print(f"    📷 Referência (Nova URL): {os.path.basename(reference_image_path)}")
             else:
                 print("    ⚠️ Falha no upload da referência, usando apenas prompt.")
 
@@ -556,33 +563,43 @@ async def generate_single_image_pollinations(scene: Scene, img_config: dict, ref
 
 async def service_generate_images(scenes: List[Scene], reference_image_path: str = None):
     """
-    Gera imagens usando o provider configurado com fallback em cascata.
-    Ordem de prioridade: Seedream -> Nano Banana -> Pollinations
-    OTIMIZAÇÃO: Geração com retry e fallback automático.
+    Gera imagens em paralelo usando o provider configurado (apenas Seedream agora).
+    Usa semáforo para limitar concorrência e upload único de referência.
     """
     provider = get_config("services.image_generation.provider", "seedream")
-    img_config = get_config(f"services.image_generation.options.pollinations", {})
     
-    print(f"[Orchestrator] Gerando {len(scenes)} imagens com {provider}...")
+    print(f"[Orchestrator] Gerando {len(scenes)} imagens com {provider} (PARALELO)...")
+    
+    # 1. Otimização: Upload único da referência no início
+    pre_uploaded_ref_url = None
     if reference_image_path:
-        print(f"  📷 Personagem de referência: {reference_image_path}")
+        print(f"  📷 Preparando personagem de referência: {reference_image_path}")
+        api_key = os.getenv("KIE_API_KEY")
+        if api_key:
+            pre_uploaded_ref_url = await upload_image_to_kie(reference_image_path, api_key)
+            if pre_uploaded_ref_url:
+                print(f"  ✅ Referência carregada em cache para reutilização.")
     
+    # 2. Configurar Semáforo para controlar concorrência (ex: 5 requests simultâneos)
+    CONCURRENCY_LIMIT = 5
+    semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
+    
+    async def generate_with_limit(scene):
+        async with semaphore:
+            # Usar exclusivamente Seedream 4.5 com a URL pré-carregada
+            return await generate_single_image_seedream(scene, {}, reference_image_path, pre_uploaded_ref_url)
+
+    # 3. Disparar tarefas em paralelo
+    tasks = [generate_with_limit(scene) for scene in scenes]
+    results = await asyncio.gather(*tasks)
+    
+    # 4. Processar resultados
     all_results = {}
-    
-    for scene in scenes:
-        filepath = None
-        
-        # Usar exclusivamente Seedream 4.5
-        result = await generate_single_image_seedream(scene, {}, reference_image_path)
+    for result in results:
         if isinstance(result, tuple):
             scene_id, filepath = result
-        
-        all_results[scene.id] = filepath
-        
-        # Delay entre imagens para evitar rate limit
-        await asyncio.sleep(2)
-    
-    # Ordenar resultados pela ordem original das cenas
+            all_results[scene_id] = filepath
+
     image_paths = [all_results.get(scene.id) for scene in scenes]
     
     success_count = sum(1 for p in image_paths if p)
@@ -591,6 +608,8 @@ async def service_generate_images(scenes: List[Scene], reference_image_path: str
     if success_count == 0:
         print("  🚨 CRÍTICO: Nenhuma imagem foi gerada. Interrompendo processo.")
         raise Exception("Falha na geração de imagens (Kie.ai). Processo interrompido para economizar créditos.")
+    
+    return image_paths
     
     return image_paths
 
@@ -793,6 +812,14 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
     
     print(f"  ✅ Vídeo renderizado: {output_filename}")
     return f"http://localhost:8000/static/{output_filename}"
+
+@app.get("/config")
+async def get_public_config():
+    """Retorna configurações públicas (preços, flags)"""
+    return {
+        "pricing": get_config("pricing", {}),
+        "app": get_config("app", {})
+    }
 
 # --- Endpoint Principal ---
 

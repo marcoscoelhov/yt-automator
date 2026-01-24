@@ -56,6 +56,15 @@ export default function App() {
   const [errorQuery, setErrorQuery] = useState<string | null>(null);
   const [characterImage, setCharacterImage] = useState<File | null>(null);
   const [characterPreview, setCharacterPreview] = useState<string | null>(null);
+  const [pricingConfig, setPricingConfig] = useState<any>(null);
+
+  // Carregar configurações do backend
+  useEffect(() => {
+    fetch('http://localhost:8000/config')
+      .then(res => res.json())
+      .then(data => setPricingConfig(data.pricing))
+      .catch(err => console.error("Falha ao carregar config:", err));
+  }, []);
 
   // Salvar voz favorita
   const handleSetFavoriteVoice = () => {
@@ -100,8 +109,8 @@ export default function App() {
   const parsedScenes: Scene[] = useMemo(() => {
     try {
       const json = JSON.parse(scriptState);
-      if (Array.isArray(json)) return json.slice(0, 8);
-      if (json.scenes) return json.scenes.slice(0, 8);
+      if (Array.isArray(json)) return json;
+      if (json.scenes) return json.scenes;
     } catch { }
     return [];
   }, [scriptState]);
@@ -258,11 +267,10 @@ export default function App() {
                   <button
                     onClick={handleSetFavoriteVoice}
                     title={favoriteVoice === voice ? "Remover favorito" : "Definir como favorito"}
-                    className={`p-2 rounded-lg border transition-all ${
-                      favoriteVoice === voice
-                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
-                        : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-amber-400 hover:border-amber-500/30'
-                    }`}
+                    className={`p-2 rounded-lg border transition-all ${favoriteVoice === voice
+                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                      : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-amber-400 hover:border-amber-500/30'
+                      }`}
                   >
                     <Star className={`w-4 h-4 ${favoriteVoice === voice ? 'fill-current' : ''}`} />
                   </button>
@@ -325,9 +333,8 @@ export default function App() {
                 {scriptHistory.length > 0 && (
                   <button
                     onClick={() => setShowHistory(!showHistory)}
-                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-all ${
-                      showHistory ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-slate-300'
-                    }`}
+                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-all ${showHistory ? 'bg-indigo-500/20 text-indigo-300' : 'text-slate-400 hover:text-slate-300'
+                      }`}
                   >
                     <History className="w-3 h-3" />
                     Histórico ({scriptHistory.length})
@@ -372,6 +379,25 @@ export default function App() {
 
           {/* Painel Direito */}
           <div className="space-y-4">
+            {/* Estimativa de Custos (Novo) */}
+            {parsedScenes.length > 0 && pricingConfig && (
+              <div className="bg-slate-900/50 backdrop-blur-xl rounded-xl border border-white/5 p-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Estimativa de Custo</h3>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-bold text-emerald-400">
+                      ${(parsedScenes.length * pricingConfig.image_unit_cost_usd).toFixed(2)}
+                    </span>
+                    <span className="text-xs text-slate-500">USD</span>
+                  </div>
+                </div>
+                <div className="text-right text-xs text-slate-500">
+                  <div>{parsedScenes.length} cenas x ${pricingConfig.image_unit_cost_usd}</div>
+                  <div>TTS: Gratuito</div>
+                </div>
+              </div>
+            )}
+
             {/* Progress */}
             {loading && (
               <div className="bg-slate-900/50 backdrop-blur-xl rounded-xl border border-white/5 p-4">
