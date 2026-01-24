@@ -4,6 +4,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import sys
+
+# Configurar encoding UTF-8 para suportar emojis no terminal Windows
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 import time
 import asyncio
 import json
@@ -17,6 +23,7 @@ from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips, Com
 import edge_tts
 from dotenv import load_dotenv
 import PIL.Image
+import httpx  # Para chamadas HTTP assíncronas (Kie.ai API)
 
 # Monkey patch para compatibilidade Pillow 10+ com MoviePy antigo
 if not hasattr(PIL.Image, 'ANTIALIAS'):
@@ -153,6 +160,177 @@ async def service_gemini_script_refinement(script: str):
         print(f"Erro Gemini Script: {e}")
         return script
 
+async def poll_kie_task_status(task_id: str, api_key: str, timeout: int = 120, interval: int = 2) -> dict:
+    """
+    Faz polling do status de uma task da API Kie.ai até conclusão.
+    Retorna o resultado ou lança Exception em caso de erro/timeout.
+    """
+    base_url = get_config("services.image_generation.options.seedream.base_url", "https://api.kie.ai/api/v1/jobs")
+    url = f"{base_url}/recordInfo?taskId={task_id}"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    start_time = time.time()
+    async with httpx.AsyncClient(timeout=30) as client:
+        while (time.time() - start_time) < timeout:
+            try:
+                response = await client.get(url, headers=headers)
+                data = response.json()
+                
+                if data.get("code") != 200:
+                    raise Exception(f"Kie.ai API error: {data.get('msg', 'Unknown error')}")
+                
+                task_data = data.get("data", {})
+                status = task_data.get("status", "").lower()
+                
+                if status == "success" or status == "completed":
+                    return task_data
+                elif status == "failed" or status == "error":
+                    raise Exception(f"Task failed: {task_data.get('error', 'Unknown error')}")
+                
+                # Ainda processando, aguardar
+                await asyncio.sleep(interval)
+                
+            except httpx.RequestError as e:
+                print(f"    ⚠️ Request error: {e}, retrying...")
+                await asyncio.sleep(interval)
+    
+    raise Exception(f"Timeout após {timeout}s aguardando task {task_id}")
+
+
+async def upload_image_for_kie(image_path: str, api_key: str) -> str:
+    """
+    Faz upload de uma imagem para o serviço de arquivos da Kie.ai.
+    Retorna a URL pública da imagem.
+    
+    NOTA: Como a Kie.ai pode não ter endpoint de upload público,
+    usamos uma estratégia de base64 inline no prompt ou um serviço externo.
+    Por enquanto, retornamos o caminho local para inclusão via base64.
+    """
+    # Para a Kie.ai, vamos converter a imagem para base64 e incluir no prompt
+    # já que eles suportam image_urls no payload
+    return image_path  # Será processado na função de geração
+
+
+async def generate_single_image_seedream(scene: Scene, img_config: dict, reference_image_path: str = None) -> tuple:
+    """
+    Gera uma única imagem com Kie.ai Seedream 4.5 API.
+    Suporta imagem de referência para consistência de personagem.
+    API assíncrona: cria task → polling até conclusão → download da imagem.
+    """
+    try:
+        api_key = os.getenv("KIE_API_KEY")
+        if not api_key:
+            raise Exception("KIE_API_KEY não configurada. Obtenha em https://kie.ai/api-key")
+        
+        seedream_config = get_config("services.image_generation.options.seedream", {})
+        base_url = seedream_config.get("base_url", "https://api.kie.ai/api/v1/jobs")
+        model = seedream_config.get("model", "seedream/4.5-text-to-image")
+        quality = seedream_config.get("quality", "basic")
+        aspect_ratio = seedream_config.get("aspect_ratio", "16:9")
+        timeout = seedream_config.get("timeout_seconds", 120)
+        interval = seedream_config.get("polling_interval_seconds", 2)
+        
+        # Extrair prompt visual
+        visual_prompt = scene.get_visual_prompt
+        if "POSITIVE PROMPT:" in visual_prompt:
+            start = visual_prompt.find("POSITIVE PROMPT:") + len("POSITIVE PROMPT:")
+            end = visual_prompt.find("NEGATIVE PROMPT:") if "NEGATIVE PROMPT:" in visual_prompt else len(visual_prompt)
+            visual_prompt = visual_prompt[start:end].strip()
+        
+        print(f"  🎨 Cena {scene.id} (Seedream 4.5): {visual_prompt[:50]}...")
+        
+        # Construir payload da API
+        payload = {
+            "model": model,
+            "input": {
+                "prompt": visual_prompt,
+                "aspect_ratio": aspect_ratio,
+                "quality": quality
+            }
+        }
+        
+        # Se tiver imagem de referência, incluir no payload
+        if reference_image_path and os.path.exists(reference_image_path):
+            # Ler imagem e converter para base64 para incluir na instrução
+            with open(reference_image_path, "rb") as f:
+                image_data = f.read()
+            image_b64 = base64.b64encode(image_data).decode("utf-8")
+            
+            # Detectar tipo de imagem
+            ext = os.path.splitext(reference_image_path)[1].lower()
+            mime_type = "image/png" if ext == ".png" else "image/jpeg"
+            
+            # Adicionar referência na instrução do prompt (Seedream suporta image_urls)
+            # Como precisamos de URL pública, vamos incluir instrução detalhada no prompt
+            character_instruction = (
+                "CRITICAL: Maintain EXACT character consistency with reference. "
+                "Same face shape, hair color/style, skin tone, clothing colors, body proportions. "
+                "The character must be immediately recognizable across all scenes. "
+            )
+            payload["input"]["prompt"] = character_instruction + visual_prompt
+            
+            # Se a API suportar image_urls diretamente, adicionar aqui
+            # Por enquanto, a consistência é via prompt detalhado
+            print(f"    📷 Referência: {os.path.basename(reference_image_path)}")
+        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        # Criar task
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(f"{base_url}/createTask", json=payload, headers=headers)
+            result = response.json()
+            
+            if result.get("code") != 200:
+                raise Exception(f"Kie.ai API error: {result.get('msg', 'Unknown error')}")
+            
+            task_id = result.get("data", {}).get("taskId")
+            if not task_id:
+                raise Exception("Nenhum taskId retornado pela API")
+            
+            print(f"    📋 Task criada: {task_id}")
+        
+        # Polling até conclusão
+        task_result = await poll_kie_task_status(task_id, api_key, timeout, interval)
+        
+        # Extrair URL da imagem gerada
+        output = task_result.get("output", {})
+        image_url = output.get("image_url") or output.get("imageUrl") or output.get("url")
+        
+        if not image_url:
+            # Tentar encontrar em outros campos
+            if isinstance(output, list) and len(output) > 0:
+                image_url = output[0].get("url") or output[0].get("image_url")
+            elif "images" in output:
+                image_url = output["images"][0] if output["images"] else None
+        
+        if not image_url:
+            print(f"    ⚠️ Resposta sem URL de imagem: {task_result}")
+            return (scene.id, None)
+        
+        # Download da imagem
+        async with httpx.AsyncClient(timeout=60) as client:
+            img_response = await client.get(image_url)
+            if img_response.status_code == 200:
+                filename = f"scene_{int(time.time())}_{scene.id}.png"
+                filepath = os.path.join(TEMP_DIR, filename)
+                with open(filepath, "wb") as f:
+                    f.write(img_response.content)
+                print(f"  ✅ Cena {scene.id} gerada (Seedream 4.5)")
+                return (scene.id, filepath)
+            else:
+                raise Exception(f"Erro ao baixar imagem: HTTP {img_response.status_code}")
+        
+    except Exception as e:
+        print(f"  ❌ Cena {scene.id} erro Seedream: {e}")
+        return (scene.id, None)
+
+
 async def generate_single_image_nanobanana(scene: Scene, img_config: dict, reference_image_path: str = None) -> tuple:
     """Gera uma única imagem com Nano Banana (Gemini 2.5 Flash Image) - Wrapper Async"""
     def _generate_sync():
@@ -170,12 +348,21 @@ async def generate_single_image_nanobanana(scene: Scene, img_config: dict, refer
             print(f"  🎨 Cena {scene.id}: {visual_prompt[:60]}...")
             
             # Preparar conteúdo: prompt + imagem de referência (se existir)
-            contents = [visual_prompt]
+            contents = []
             
             if reference_image_path and os.path.exists(reference_image_path):
                 ref_image = PIL.Image.open(reference_image_path)
-                contents = [visual_prompt, ref_image]
-                print(f"    📷 Usando imagem de referência: {os.path.basename(reference_image_path)}")
+                # Instrução explícita para usar o personagem da referência
+                character_instruction = (
+                    "IMPORTANT: Use the character from the reference image below as the MAIN CHARACTER in this scene. "
+                    "Keep the same character design, face, body proportions, clothing style, and colors. "
+                    "The character must be clearly recognizable as the same person from the reference. "
+                    "Reference image:"
+                )
+                contents = [character_instruction, ref_image, f"\n\nScene to generate: {visual_prompt}"]
+                print(f"    📷 Usando personagem de referência: {os.path.basename(reference_image_path)}")
+            else:
+                contents = [visual_prompt]
             
             # Gerar imagem com Nano Banana
             response = gemini_client.models.generate_content(
@@ -210,70 +397,92 @@ async def generate_single_image_nanobanana(scene: Scene, img_config: dict, refer
     return await asyncio.to_thread(_generate_sync)
 
 async def generate_single_image_pollinations(scene: Scene, img_config: dict, reference_image_path: str = None) -> tuple:
-    """Gera uma única imagem com Pollinations API - Wrapper Async"""
+    """Gera uma única imagem com Pollinations API - Wrapper Async com retry"""
     def _generate_sync():
-        try:
-            visual_prompt = scene.get_visual_prompt
-            if "POSITIVE PROMPT:" in visual_prompt:
-                start = visual_prompt.find("POSITIVE PROMPT:") + len("POSITIVE PROMPT:")
-                end = visual_prompt.find("NEGATIVE PROMPT:") if "NEGATIVE PROMPT:" in visual_prompt else len(visual_prompt)
-                visual_prompt = visual_prompt[start:end].strip()
-            
-            base_url = img_config.get("base_url", "https://gen.pollinations.ai/image/")
-            model = img_config.get("model", "turbo")
-            width = img_config.get("width", 1280)
-            height = img_config.get("height", 720)
-            
-            # API Key para autenticação (aumenta limites)
-            api_key = os.getenv("POLLINATIONS_API_KEY", "")
-            
-            encoded_prompt = requests.utils.quote(visual_prompt)
-            url = f"{base_url}{encoded_prompt}?width={width}&height={height}&model={model}&seed={scene.id}&nologo=true"
-            
-            # Adicionar imagem de referência se disponível (para consistência de personagem)
-            if reference_image_path and os.path.exists(reference_image_path):
-                # Converter imagem para base64 e adicionar como parâmetro
-                import base64
-                with open(reference_image_path, "rb") as img_file:
-                    img_b64 = base64.b64encode(img_file.read()).decode('utf-8')
-                    # Pollinations aceita URL de imagem - usar data URI
-                    img_data_uri = f"data:image/png;base64,{img_b64}"
-                    url += f"&image={requests.utils.quote(img_data_uri)}"
-                    print(f"  📷 Usando imagem de referência para consistência")
-            
-            # Headers com Bearer token se API key disponível
-            headers = {}
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
-            
-            print(f"  🎨 Cena {scene.id} ({model}): {visual_prompt[:50]}...")
-            
-            response = requests.get(url, headers=headers, timeout=120)
-            if response.status_code == 200:
-                # Detectar formato pelo content-type
-                content_type = response.headers.get("content-type", "image/jpeg")
-                ext = "png" if "png" in content_type else "jpg"
-                filename = f"scene_{int(time.time())}_{scene.id}.{ext}"
-                filepath = os.path.join(TEMP_DIR, filename)
-                with open(filepath, "wb") as f:
-                    f.write(response.content)
-                print(f"  ✅ Cena {scene.id} gerada (Pollinations {model})")
-                return (scene.id, filepath)
-            else:
-                print(f"  ❌ Cena {scene.id} falhou: HTTP {response.status_code}")
+        visual_prompt = scene.get_visual_prompt
+        if "POSITIVE PROMPT:" in visual_prompt:
+            start = visual_prompt.find("POSITIVE PROMPT:") + len("POSITIVE PROMPT:")
+            end = visual_prompt.find("NEGATIVE PROMPT:") if "NEGATIVE PROMPT:" in visual_prompt else len(visual_prompt)
+            visual_prompt = visual_prompt[start:end].strip()
+        
+        base_url = img_config.get("base_url", "https://gen.pollinations.ai/image/")
+        model = img_config.get("model", "turbo")
+        width = img_config.get("width", 1280)
+        height = img_config.get("height", 720)
+        api_key = os.getenv("POLLINATIONS_API_KEY", "")
+        
+        # Se tem referência, adicionar instrução detalhada no prompt
+        # NOTA: Pollinations não suporta base64 inline (causa HTTP 414)
+        if reference_image_path and os.path.exists(reference_image_path):
+            # Adicionar instrução no prompt para manter consistência
+            visual_prompt = f"Maintain consistent character design throughout. Scene: {visual_prompt}"
+        
+        encoded_prompt = requests.utils.quote(visual_prompt)
+        url = f"{base_url}{encoded_prompt}?width={width}&height={height}&model={model}&seed={scene.id}&nologo=true"
+        
+        # Headers com Bearer token
+        headers = {}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        
+        # Retry com backoff exponencial para rate limit (429)
+        max_retries = 3
+        retry_delays = [5, 10, 20]  # Segundos entre tentativas
+        
+        for attempt in range(max_retries + 1):
+            try:
+                if attempt == 0:
+                    print(f"  🎨 Cena {scene.id} ({model}): {visual_prompt[:45]}...")
+                else:
+                    print(f"  🔄 Cena {scene.id}: Retry {attempt}/{max_retries}...")
+                
+                response = requests.get(url, headers=headers, timeout=120)
+                
+                if response.status_code == 200:
+                    content_type = response.headers.get("content-type", "image/jpeg")
+                    ext = "png" if "png" in content_type else "jpg"
+                    filename = f"scene_{int(time.time())}_{scene.id}.{ext}"
+                    filepath = os.path.join(TEMP_DIR, filename)
+                    with open(filepath, "wb") as f:
+                        f.write(response.content)
+                    print(f"  ✅ Cena {scene.id} gerada ({model})")
+                    return (scene.id, filepath)
+                
+                elif response.status_code == 429:
+                    # Rate limit - aguardar e tentar novamente
+                    if attempt < max_retries:
+                        delay = retry_delays[attempt]
+                        print(f"  ⏳ Cena {scene.id}: Rate limit, aguardando {delay}s...")
+                        time.sleep(delay)
+                        continue
+                    else:
+                        print(f"  ❌ Cena {scene.id}: Rate limit persistente após {max_retries} tentativas")
+                        return (scene.id, None)
+                else:
+                    print(f"  ❌ Cena {scene.id} falhou: HTTP {response.status_code}")
+                    return (scene.id, None)
+                    
+            except requests.exceptions.Timeout:
+                if attempt < max_retries:
+                    print(f"  ⏳ Cena {scene.id}: Timeout, tentando novamente...")
+                    continue
+                print(f"  ❌ Cena {scene.id}: Timeout após {max_retries} tentativas")
                 return (scene.id, None)
-        except Exception as e:
-            print(f"  ❌ Cena {scene.id} erro: {e}")
-            return (scene.id, None)
+            except Exception as e:
+                print(f"  ❌ Cena {scene.id} erro: {e}")
+                return (scene.id, None)
+        
+        return (scene.id, None)
 
     return await asyncio.to_thread(_generate_sync)
 
 async def service_generate_images(scenes: List[Scene], reference_image_path: str = None):
     """
-    Gera imagens usando Nano Banana (Gemini 2.5 Flash) com fallback para Pollinations.
+    Gera imagens usando o provider configurado com fallback em cascata.
+    Ordem de prioridade: Seedream -> Nano Banana -> Pollinations
     OTIMIZAÇÃO: Geração com retry e fallback automático.
     """
-    provider = get_config("services.image_generation.provider", "nanobanana")
+    provider = get_config("services.image_generation.provider", "seedream")
     img_config = get_config(f"services.image_generation.options.pollinations", {})
     
     print(f"[Orchestrator] Gerando {len(scenes)} imagens com {provider}...")
@@ -285,22 +494,30 @@ async def service_generate_images(scenes: List[Scene], reference_image_path: str
     for scene in scenes:
         filepath = None
         
-        # Tentar Nano Banana primeiro (se configurado)
-        if provider == "nanobanana":
+        # Tentar Seedream primeiro (se configurado)
+        if provider == "seedream":
+            result = await generate_single_image_seedream(scene, {}, reference_image_path)
+            if isinstance(result, tuple):
+                scene_id, filepath = result
+        
+        # Fallback para Nano Banana se Seedream falhou ou não é o provider
+        if not filepath and (provider == "nanobanana" or (provider == "seedream" and not filepath)):
+            if provider == "seedream":
+                print(f"  🔄 Cena {scene.id}: Tentando Nano Banana como fallback...")
             result = await generate_single_image_nanobanana(scene, {}, reference_image_path)
             if isinstance(result, tuple):
                 scene_id, filepath = result
         
-        # Fallback para Pollinations se Nano Banana falhou
+        # Fallback final para Pollinations
         if not filepath:
-            print(f"  🔄 Cena {scene.id}: Usando Pollinations como fallback...")
+            print(f"  🔄 Cena {scene.id}: Usando Pollinations como fallback final...")
             result = await generate_single_image_pollinations(scene, img_config, reference_image_path)
             if isinstance(result, tuple):
                 scene_id, filepath = result
         
         all_results[scene.id] = filepath
         
-        # Delay maior para evitar rate limit (HTTP 429)
+        # Delay entre imagens para evitar rate limit
         await asyncio.sleep(3)
     
     # Ordenar resultados pela ordem original das cenas

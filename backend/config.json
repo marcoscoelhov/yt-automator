@@ -6,9 +6,18 @@
     },
     "services": {
         "image_generation": {
-            "provider": "pollinations",
+            "provider": "seedream",
             "enabled": true,
             "options": {
+                "seedream": {
+                    "api_key_env": "KIE_API_KEY",
+                    "model": "seedream/4.5-text-to-image",
+                    "quality": "basic",
+                    "aspect_ratio": "16:9",
+                    "base_url": "https://api.kie.ai/api/v1/jobs",
+                    "polling_interval_seconds": 2,
+                    "timeout_seconds": 120
+                },
                 "pollinations": {
                     "base_url": "https://gen.pollinations.ai/image/",
                     "model": "nanobanana",
