@@ -23,6 +23,7 @@ from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips, Com
 import edge_tts
 from dotenv import load_dotenv
 import PIL.Image
+import hashlib  # Para cache de imagens
 import httpx  # Para chamadas HTTP assíncronas (Kie.ai API)
 
 # Monkey patch para compatibilidade Pillow 10+ com MoviePy antigo
@@ -300,6 +301,18 @@ async def generate_single_image_seedream(scene: Scene, img_config: dict, referen
         
         print(f"  🎨 Cena {scene.id} (Seedream 4.5): {visual_prompt[:50]}...")
         
+        # --- CACHE SYSTEM ---
+        # Gerar hash único baseado no prompt e imagem de referência
+        cache_key = f"{visual_prompt}_{reference_image_path or ''}_{pre_uploaded_ref_url or ''}"
+        prompt_hash = hashlib.md5(cache_key.encode("utf-8")).hexdigest()
+        cache_filename = f"cache_{prompt_hash}.png"
+        cache_filepath = os.path.join(TEMP_DIR, cache_filename)
+        
+        if os.path.exists(cache_filepath):
+            print(f"  ♻️ Cena {scene.id}: Imagem em cache encontrada! Economizando créditos.")
+            return (scene.id, cache_filepath)
+        # --------------------
+        
         # Construir payload da API
         payload = {
             "model": model,
@@ -406,6 +419,11 @@ async def generate_single_image_seedream(scene: Scene, img_config: dict, referen
                 filepath = os.path.join(TEMP_DIR, filename)
                 with open(filepath, "wb") as f:
                     f.write(img_response.content)
+                
+                # Salvar também no cache
+                with open(cache_filepath, "wb") as f:
+                    f.write(img_response.content)
+                    
                 print(f"  ✅ Cena {scene.id} gerada (Seedream 4.5)")
                 return (scene.id, filepath)
             else:
@@ -646,7 +664,16 @@ async def service_generate_audio(scenes: List[Scene], voice_alias: str):
         "Charon": "Charon",
         "Fenrir": "Fenrir",
         "Aoede": "Aoede",
-        "Kore": "Kore"
+        "Kore": "Kore",
+        "Enceladus": "Enceladus",
+        "Orus": "Orus",
+        "Zephyr": "Zephyr",
+        "Leda": "Leda",
+        "Erinome": "Erinome",
+        "Iapetus": "Iapetus",
+        "Algenib": "Algenib",
+        "Harpalyke": "Harpalyke",
+        "Mneme": "Mneme"
     }
     target_voice = voice_map.get(voice_alias, "Puck")
     
@@ -699,7 +726,16 @@ async def service_generate_audio_edge_fallback(scenes: List[Scene], voice_alias:
         "Charon": "pt-BR-FabioNeural",
         "Kore": "pt-BR-ThalitaNeural",
         "Fenrir": "pt-BR-AntonioNeural",
-        "Aoede": "pt-BR-FranciscaNeural"
+        "Aoede": "pt-BR-FranciscaNeural",
+        "Enceladus": "pt-BR-AntonioNeural",
+        "Orus": "pt-BR-FabioNeural",
+        "Zephyr": "pt-BR-FranciscaNeural",
+        "Leda": "pt-BR-ThalitaNeural",
+        "Erinome": "pt-BR-ThalitaNeural",
+        "Iapetus": "pt-BR-AntonioNeural",
+        "Algenib": "pt-BR-FabioNeural",
+        "Harpalyke": "pt-BR-FranciscaNeural",
+        "Mneme": "pt-BR-ThalitaNeural"
     }
     target_voice = voice_map.get(voice_alias, "pt-BR-AntonioNeural")
     
@@ -729,6 +765,31 @@ def apply_zoom_effect(clip, zoom_type: str, duration: float):
         return clip.resize(lambda t: 1.15 - (0.15 * t / duration))
     else:
         return clip
+
+def resize_to_fill(clip, target_width, target_height):
+    """Redimensiona o clip para preencher a tela (crop) mantendo aspect ratio"""
+    w, h = clip.size
+    ratio_clip = w / h
+    ratio_target = target_width / target_height
+    
+    if ratio_clip > ratio_target:
+        # Imagem mais larga que o alvo: ajustar pela altura e cortar laterais
+        new_height = target_height
+        new_width = int(new_height * ratio_clip)
+        clip = clip.resize(height=new_height)
+        # Centralizar (crop automático no CompositeVideoClip ou manual)
+        # Mas para garantir, vamos fazer crop manual centralizado
+        x_center = new_width / 2
+        clip = clip.crop(x1=x_center - target_width/2, width=target_width)
+    else:
+        # Imagem mais alta que o alvo (ou igual): ajustar pela largura e cortar topo/baixo
+        new_width = target_width
+        new_height = int(new_width / ratio_clip)
+        clip = clip.resize(width=new_width)
+        y_center = new_height / 2
+        clip = clip.crop(y1=y_center - target_height/2, height=target_height)
+        
+    return clip
 
 async def service_render_video(image_paths: List[str], audio_path: str, scenes: List[Scene]):
     """
@@ -770,7 +831,15 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
         
         # Criar clip base
         clip = ImageClip(img_path).set_duration(scene_duration)
-        clip = clip.resize(height=720)
+        
+        # FIX: Usar resize_to_fill em vez de apenas resize height
+        # Isso garante que imagens quadradas/retangulares preencham 16:9 sem barras pretas
+        try:
+            clip = resize_to_fill(clip, 1280, 720)
+        except Exception as e:
+            print(f"Erro no resize_to_fill: {e}, usando resize padrão")
+            clip = clip.resize(height=720)
+            
         clip = clip.set_position("center")
         
         # Aplicar efeito de zoom baseado no tipo de transição
@@ -807,7 +876,8 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
         temp_audiofile=os.path.join(TEMP_DIR, "temp-audio.m4a"), 
         remove_temp=True, 
         logger=None,
-        preset="ultrafast"
+        preset="ultrafast",
+        threads=4  # Aumentar threads para renderização mais rápida
     )
     
     print(f"  ✅ Vídeo renderizado: {output_filename}")

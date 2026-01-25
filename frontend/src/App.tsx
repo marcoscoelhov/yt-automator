@@ -18,11 +18,21 @@ interface ScriptHistory {
 }
 
 const VOICES = [
+  // Vozes Masculinas
   { id: 'Puck', name: 'Puck', desc: 'Masculino • Energético' },
-  { id: 'Kore', name: 'Kore', desc: 'Feminino • Jovem' },
+  { id: 'Enceladus', name: 'Enceladus', desc: 'Masculino • Entusiasmado' },
+  { id: 'Fenrir', name: 'Fenrir', desc: 'Masculino • Grave/Profundo' },
   { id: 'Charon', name: 'Charon', desc: 'Masculino • Profundo' },
+  { id: 'Orus', name: 'Orus', desc: 'Masculino • Confiante' },
+  { id: 'Zephyr', name: 'Zephyr', desc: 'Feminino • Suave' }, // Zephyr é as vezes listado como Fem ou Masc dependendo da fonte, no Gemini é Fem
+  { id: 'Leda', name: 'Leda', desc: 'Feminino • Calmo' },
+  { id: 'Kore', name: 'Kore', desc: 'Feminino • Jovem' },
   { id: 'Aoede', name: 'Aoede', desc: 'Feminino • Melódico' },
-  { id: 'Fenrir', name: 'Fenrir', desc: 'Masculino • Grave' },
+  { id: 'Erinome', name: 'Erinome', desc: 'Feminino • Fluido' },
+  { id: 'Iapetus', name: 'Iapetus', desc: 'Masculino • Sério' },
+  { id: 'Algenib', name: 'Algenib', desc: 'Masculino • Rápido' },
+  { id: 'Harpalyke', name: 'Harpalyke', desc: 'Feminino • Narrativo' },
+  { id: 'Mneme', name: 'Mneme', desc: 'Feminino • Claro' },
 ];
 
 const STORAGE_KEYS = {
