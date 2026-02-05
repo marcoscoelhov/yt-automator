@@ -1538,17 +1538,18 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
     
     print(f"[Orchestrator] Renderizando {len(clips)} cenas ({total_audio_duration:.1f}s total)...")
     
-    # Renderizar (preset ultrafast para MVP)
+    # Renderizar (qualidade ok sem ficar "ultrafast")
     final_video.write_videofile(
-        output_path, 
-        fps=24, 
-        codec="libx264", 
-        audio_codec="aac", 
-        temp_audiofile=os.path.join(TEMP_DIR, "temp-audio.m4a"), 
-        remove_temp=True, 
+        output_path,
+        fps=24,
+        codec="libx264",
+        audio_codec="aac",
+        temp_audiofile=os.path.join(TEMP_DIR, "temp-audio.m4a"),
+        remove_temp=True,
         logger=None,
-        preset="ultrafast",
-        threads=4  # Aumentar threads para renderização mais rápida
+        preset="fast",
+        ffmpeg_params=["-crf", "18", "-pix_fmt", "yuv420p"],
+        threads=4,
     )
     
     print(f"  ✅ Vídeo renderizado: {output_filename}")
