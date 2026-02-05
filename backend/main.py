@@ -1287,69 +1287,166 @@ def _paste_center(dst: Image.Image, src: Image.Image, center_xy: tuple[int, int]
 
 
 def _render_layer_scene_to_png(scene: Scene, out_path: str, size=(1280, 720)) -> str:
-    """Renderiza 1 cena (layers) em um PNG (fundo branco) usando avatar + props."""
+    """Renderiza 1 cena (layers) em um PNG (fundo branco) usando avatar + props.
+
+    MVP: fit-to-box (evita recorte/pixelização), z-order por template,
+    icons_with_red_x com red_x como overlay, e validação mínima.
+    """
     W, H = size
     canvas = Image.new("RGBA", (W, H), (255, 255, 255, 255))
 
-    template = scene.template or "avatar_center"
-    avatar_pose = scene.avatar_pose or "neutral_arms_crossed"
+    template = (scene.template or "avatar_center").strip().lower()
+    avatar_pose = (scene.avatar_pose or "neutral_arms_crossed").strip()
     props = scene.props or []
 
-    # Avatar
+    # --- load assets ---
     avatar_path = _asset_path_avatar(avatar_pose)
     if not os.path.exists(avatar_path):
         raise Exception(f"Avatar pose não encontrada: {avatar_pose} ({avatar_path})")
     avatar = _load_rgba(avatar_path)
 
-    # Props
-    prop_imgs = []
-    for p in props[:3]:
-        prop_path = _asset_path_prop(p)
+    def load_prop(name: str) -> Image.Image:
+        prop_path = _asset_path_prop(name)
         if not os.path.exists(prop_path):
-            raise Exception(f"Prop não encontrado: {p} ({prop_path})")
-        prop_imgs.append((p, _load_rgba(prop_path)))
+            raise Exception(f"Prop não encontrado: {name} ({prop_path})")
+        return _load_rgba(prop_path)
 
-    # Layouts simples (MVP)
-    if template == "avatar_center":
-        _paste_center(canvas, avatar, (int(W * 0.65), int(H * 0.55)), scale=1.0)
-        if prop_imgs:
-            _paste_center(canvas, prop_imgs[0][1], (int(W * 0.30), int(H * 0.50)), scale=1.0)
-            if len(prop_imgs) > 1:
-                _paste_center(canvas, prop_imgs[1][1], (int(W * 0.30), int(H * 0.25)), scale=0.8)
+    # --- template boxes ---
+    def boxes_for(tpl: str):
+        if tpl == 'avatar_center':
+            # Avatar central/inferior (evita recorte: avatar costuma ser 768px de altura)
+            return {
+                'avatar': (int(W * 0.22), int(H * 0.03), int(W * 0.78), int(H * 0.99)),
+                'prop_1': (int(W * 0.02), int(H * 0.35), int(W * 0.28), int(H * 0.82)),
+                'prop_2': (int(W * 0.72), int(H * 0.10), int(W * 0.98), int(H * 0.38)),
+            }
+        if tpl == 'avatar_left_prop_right':
+            return {
+                'avatar': (int(W * 0.02), int(H * 0.03), int(W * 0.52), int(H * 0.99)),
+                'prop_1': (int(W * 0.52), int(H * 0.18), int(W * 0.98), int(H * 0.92)),
+                'prop_2': (int(W * 0.62), int(H * 0.05), int(W * 0.96), int(H * 0.30)),
+            }
+        if tpl == 'avatar_right_prop_left':
+            return {
+                'avatar': (int(W * 0.48), int(H * 0.03), int(W * 0.98), int(H * 0.99)),
+                'prop_1': (int(W * 0.02), int(H * 0.18), int(W * 0.48), int(H * 0.92)),
+                'prop_2': (int(W * 0.04), int(H * 0.05), int(W * 0.38), int(H * 0.30)),
+            }
+        if tpl == 'metaphor_single_prop':
+            return {
+                'prop_1': (int(W * 0.32), int(H * 0.10), int(W * 0.98), int(H * 0.92)),
+                'avatar': (int(W * 0.02), int(H * 0.20), int(W * 0.38), int(H * 0.99)),
+            }
+        if tpl == 'icons_with_red_x':
+            col = (int(W * 0.04), int(H * 0.18), int(W * 0.24), int(H * 0.86))
+            x1, y1, x2, y2 = col
+            col_h = y2 - y1
+            gap = int(col_h * 0.04)
+            cell_h = int((col_h - 2 * gap) / 3)
+            icons = []
+            for i in range(3):
+                yy1 = y1 + i * (cell_h + gap)
+                yy2 = yy1 + cell_h
+                icons.append((x1, yy1, x2, yy2))
+            return {
+                'avatar': (int(W * 0.28), int(H * 0.03), int(W * 0.98), int(H * 0.99)),
+                'icons': icons,
+            }
 
-    elif template == "avatar_left_prop_right" or template == "avatar_left_prop_right".lower():
-        _paste_center(canvas, avatar, (int(W * 0.25), int(H * 0.58)), scale=1.0)
-        if prop_imgs:
-            _paste_center(canvas, prop_imgs[0][1], (int(W * 0.70), int(H * 0.50)), scale=1.0)
-            if len(prop_imgs) > 1:
-                _paste_center(canvas, prop_imgs[1][1], (int(W * 0.70), int(H * 0.25)), scale=0.8)
+        return {
+            'avatar': (int(W * 0.35), int(H * 0.03), int(W * 0.98), int(H * 0.99)),
+            'prop_1': (int(W * 0.05), int(H * 0.32), int(W * 0.38), int(H * 0.78)),
+        }
 
-    elif template == "avatar_right_prop_left":
-        _paste_center(canvas, avatar, (int(W * 0.75), int(H * 0.58)), scale=1.0)
-        if prop_imgs:
-            _paste_center(canvas, prop_imgs[0][1], (int(W * 0.30), int(H * 0.50)), scale=1.0)
-            if len(prop_imgs) > 1:
-                _paste_center(canvas, prop_imgs[1][1], (int(W * 0.30), int(H * 0.25)), scale=0.8)
+    boxes = boxes_for(template)
+    placements: list[dict] = []
 
-    elif template == "icons_with_red_x":
-        _paste_center(canvas, avatar, (int(W * 0.65), int(H * 0.55)), scale=1.0)
-        # Coluna de ícones à esquerda
-        ys = [int(H * 0.25), int(H * 0.45), int(H * 0.65)]
-        for i, (_, pim) in enumerate(prop_imgs[:3]):
-            _paste_center(canvas, pim, (int(W * 0.18), ys[i]), scale=0.8)
+    def paste_with_overlap_guard(name: str, kind: str, im: Image.Image, box, anchor, avoid=None):
+        avoid = avoid or []
+        max_tries = 7
+        inset = 0
+        for _ in range(max_tries):
+            b = _box_inset(box, inset)
+            if b[2] <= b[0] + 10 or b[3] <= b[1] + 10:
+                break
+            pred = _predict_fit_bbox((W, H), im.size, b, anchor=anchor, max_upscale=1.0, allow_downscale=True)
+            worst = 0.0
+            for ab in avoid:
+                worst = max(worst, _bbox_overlap_ratio(pred, ab))
+            if worst <= 0.20:
+                box = b
+                break
+            inset += int(0.05 * min((box[2]-box[0]), (box[3]-box[1]))) or 8
 
-    elif template == "metaphor_single_prop":
-        _paste_center(canvas, avatar, (int(W * 0.30), int(H * 0.60)), scale=1.0)
-        if prop_imgs:
-            _paste_center(canvas, prop_imgs[0][1], (int(W * 0.70), int(H * 0.52)), scale=1.15)
+        final_bbox = paste_fit(canvas, im, box, anchor=anchor, max_upscale=1.0, allow_downscale=True)
+        placements.append({'name': name, 'kind': kind, 'bbox': final_bbox, 'box': box})
+        return final_bbox
+
+    # --- render by template + z-order ---
+    if template == 'icons_with_red_x':
+        avatar_bbox = paste_fit(canvas, avatar, boxes['avatar'], anchor='center bottom', max_upscale=1.0, allow_downscale=True)
+        placements.append({'name': avatar_pose, 'kind': 'avatar', 'bbox': avatar_bbox, 'box': boxes['avatar']})
+
+        has_red_x = any((p or '').strip().lower() == 'red_x' for p in props)
+        icon_names = [p.strip() for p in props if isinstance(p, str) and p.strip() and p.strip().lower() != 'red_x']
+        # garantir 2-3 ícones base (MVP)
+        if len(icon_names) < 2:
+            for fb in ['coin_stack', 'chart_up', 'calendar', 'piggy_bank', 'moneybag', 'warning_sign']:
+                if fb in icon_names:
+                    continue
+                if os.path.exists(_asset_path_prop(fb)):
+                    icon_names.append(fb)
+                if len(icon_names) >= 2:
+                    break
+        icon_names = icon_names[:3]
+
+        icon_bboxes = []
+        for i, icon_name in enumerate(icon_names):
+            try:
+                icon_im = load_prop(icon_name)
+            except Exception as e:
+                print(f"[Layers] Icon prop inválido: {icon_name}: {e}")
+                continue
+            box = boxes['icons'][i] if i < len(boxes['icons']) else boxes['icons'][-1]
+            bb = paste_fit(canvas, icon_im, box, anchor='center center', max_upscale=1.0, allow_downscale=True)
+            icon_bboxes.append(bb)
+            placements.append({'name': icon_name, 'kind': 'icon', 'bbox': bb, 'box': box})
+
+        if has_red_x and icon_bboxes:
+            redx = load_prop('red_x')
+            for k, ib in enumerate(icon_bboxes):
+                ov_box = _box_inset(ib, int(0.08 * min(ib[2]-ib[0], ib[3]-ib[1])))
+                bb = paste_fit(canvas, redx, ov_box, anchor='center center', max_upscale=1.0, allow_downscale=True)
+                placements.append({'name': f'red_x_{k}', 'kind': 'overlay', 'bbox': bb, 'box': ov_box})
+
+    elif template == 'metaphor_single_prop':
+        prop_names = [p for p in props if isinstance(p, str)][:2]
+        if prop_names:
+            p1 = load_prop(prop_names[0])
+            p1_bbox = paste_fit(canvas, p1, boxes['prop_1'], anchor='center center', max_upscale=1.0, allow_downscale=True)
+            placements.append({'name': prop_names[0], 'kind': 'prop', 'bbox': p1_bbox, 'box': boxes['prop_1']})
+
+        avatar_bbox = paste_fit(canvas, avatar, boxes['avatar'], anchor='center bottom', max_upscale=1.0, allow_downscale=True)
+        placements.append({'name': avatar_pose, 'kind': 'avatar', 'bbox': avatar_bbox, 'box': boxes['avatar']})
 
     else:
-        # fallback
-        _paste_center(canvas, avatar, (int(W * 0.65), int(H * 0.55)), scale=1.0)
-        if prop_imgs:
-            _paste_center(canvas, prop_imgs[0][1], (int(W * 0.30), int(H * 0.50)), scale=1.0)
+        if template not in {'avatar_center', 'avatar_left_prop_right', 'avatar_right_prop_left'}:
+            template = 'avatar_center'
+            boxes = boxes_for(template)
 
-    # salvar
+        avatar_bbox = paste_fit(canvas, avatar, boxes['avatar'], anchor='center bottom', max_upscale=1.0, allow_downscale=True)
+        placements.append({'name': avatar_pose, 'kind': 'avatar', 'bbox': avatar_bbox, 'box': boxes['avatar']})
+
+        prop_names = [p for p in props if isinstance(p, str)][:2]
+        if prop_names:
+            p1 = load_prop(prop_names[0])
+            paste_with_overlap_guard(prop_names[0], 'prop', p1, boxes.get('prop_1', boxes['avatar']), 'center center', avoid=[avatar_bbox])
+        if len(prop_names) > 1 and boxes.get('prop_2'):
+            p2 = load_prop(prop_names[1])
+            paste_with_overlap_guard(prop_names[1], 'prop', p2, boxes['prop_2'], 'center center', avoid=[avatar_bbox])
+
+    validate_layout(placements, (W, H), clip_margin=2, overlap_threshold=0.20)
+
     canvas.convert("RGB").save(out_path, format="PNG", optimize=True)
     return out_path
 
