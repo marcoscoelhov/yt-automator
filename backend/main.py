@@ -23,6 +23,7 @@ from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips, Com
 import edge_tts
 from dotenv import load_dotenv
 import PIL.Image
+from PIL import Image, ImageDraw
 import hashlib  # Para cache de imagens
 import httpx  # Para chamadas HTTP assíncronas (Kie.ai API)
 
@@ -109,6 +110,12 @@ class Scene(BaseModel):
     duracao_estimada: Optional[float] = 5.0
     tipo_transicao: Optional[str] = "cut"  # zoom_in, zoom_out, crossfade, cut
     style_instructions: Optional[str] = None
+
+    # --- Nick-style layers mode (opcional) ---
+    template: Optional[str] = None  # ex: avatar_left_prop_right, icons_with_red_x
+    avatar_pose: Optional[str] = None  # ex: neutral_arms_crossed
+    props: Optional[List[str]] = None  # ex: ["moneybag", "red_x"]
+    motion: Optional[str] = None  # ex: slow_zoom_in, pop_in_prop
     
     @property
     def get_narration(self) -> str:
@@ -135,12 +142,192 @@ class VideoGenerationRequest(BaseModel):
     scenes: List[Scene]
     voice_id: str
     narration_style: Optional[str] = "Normal"
-    reference_image_b64: Optional[str] = None 
+    reference_image_b64: Optional[str] = None
+    mode: Optional[str] = "images"  # images | layers
 
 class VideoResponse(BaseModel):
     status: str
     video_url: Optional[str] = None
     message: str
+
+
+# --- Auto-generate (Brief -> Nick BR JSON -> Render) ---
+
+class AutoGenerateRequest(BaseModel):
+    brief: str
+    voice_id: Optional[str] = "Antonio"
+    mode: Optional[str] = "layers"  # force layers to avoid image-gen API calls
+
+class AutoGenerateResponse(BaseModel):
+    status: str
+    title: Optional[str] = None
+    description: Optional[str] = None
+    scene_plan: Optional[dict] = None
+    video_url: Optional[str] = None
+    message: str
+
+
+def _read_text_file(path: str) -> str:
+    with open(path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def _safe_json_extract(text: str) -> dict:
+    """Best-effort JSON extraction: direct parse, or extract fenced blocks."""
+    text = (text or '').strip()
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    import re
+    m = re.search(r"```json\s*(\{[\s\S]*?\})\s*```", text)
+    if m:
+        try:
+            return json.loads(m.group(1))
+        except Exception:
+            pass
+    a = text.find('{')
+    b = text.rfind('}')
+    if a != -1 and b != -1 and b > a:
+        try:
+            return json.loads(text[a:b+1])
+        except Exception:
+            pass
+    raise Exception('LLM output is not valid JSON')
+
+
+def _load_layers_asset_catalog() -> dict:
+    catalog = {"avatar_poses": [], "props": [], "templates": [
+        "avatar_center",
+        "avatar_left_prop_right",
+        "avatar_right_prop_left",
+        "icons_with_red_x",
+        "metaphor_single_prop",
+    ]}
+    try:
+        avatar_meta = os.path.join(BASE_DIR, 'assets', 'avatars', 'marcos_avatar', 'whisk_pack_v1_png', '_meta.json')
+        if os.path.exists(avatar_meta):
+            data = json.loads(_read_text_file(avatar_meta))
+            catalog['avatar_poses'] = sorted(list((data.get('files') or {}).keys()))
+    except Exception as e:
+        print(f"[AutoGenerate] Failed loading avatar catalog: {e}")
+    try:
+        props_meta = os.path.join(BASE_DIR, 'assets', 'props', 'whisk_pack_v1_png', '_meta.json')
+        if os.path.exists(props_meta):
+            data = json.loads(_read_text_file(props_meta))
+            catalog['props'] = sorted(list((data.get('files') or {}).keys()))
+    except Exception as e:
+        print(f"[AutoGenerate] Failed loading props catalog: {e}")
+    return catalog
+
+
+def _validate_scene_plan(plan: dict) -> dict:
+    if not isinstance(plan, dict):
+        raise Exception('scene_plan must be an object')
+
+    title = plan.get('title')
+    description = plan.get('description')
+    script = plan.get('script')
+    scenes = plan.get('scenes')
+
+    if not isinstance(title, str) or len(title.strip()) < 5:
+        raise Exception('Missing/invalid title')
+    if not isinstance(description, str) or len(description.strip()) < 10:
+        raise Exception('Missing/invalid description')
+    if not isinstance(script, str) or len(script.strip()) < 30:
+        raise Exception('Missing/invalid script')
+    if not isinstance(scenes, list) or len(scenes) < 4:
+        raise Exception('Missing/invalid scenes array')
+
+    catalog = _load_layers_asset_catalog()
+    allowed_templates = set(catalog['templates'])
+    allowed_poses = set(catalog['avatar_poses'])
+    allowed_props = set(catalog['props'])
+
+    normalized_scenes = []
+    for i, sc in enumerate(scenes, start=1):
+        if not isinstance(sc, dict):
+            raise Exception(f'Scene {i} must be an object')
+
+        texto = (sc.get('texto_narracao') or sc.get('description') or '').strip()
+        if len(texto) < 5:
+            raise Exception(f'Scene {i} missing texto_narracao')
+
+        dur = sc.get('duracao_estimada') or sc.get('duration_est') or 5.0
+        try:
+            dur = float(dur)
+        except Exception:
+            dur = 5.0
+        if dur < 2.5: dur = 2.5
+        if dur > 9.0: dur = 9.0
+
+        template = (sc.get('template') or 'avatar_left_prop_right').strip()
+        if template not in allowed_templates:
+            template = 'avatar_left_prop_right'
+
+        pose = (sc.get('avatar_pose') or 'neutral_arms_crossed').strip()
+        if allowed_poses and pose not in allowed_poses:
+            pose = 'neutral_arms_crossed'
+
+        props = sc.get('props') or []
+        if not isinstance(props, list):
+            props = []
+        props2 = []
+        for p in props[:3]:
+            if isinstance(p, str) and (not allowed_props or p in allowed_props):
+                props2.append(p)
+        if template == 'icons_with_red_x' and 'red_x' not in props2:
+            props2 = (props2 + ['red_x'])[:3]
+
+        normalized_scenes.append({
+            'id': i,
+            'texto_narracao': texto,
+            'prompt_visual': (sc.get('prompt_visual') or sc.get('visual_prompt') or '').strip() or None,
+            'duracao_estimada': dur,
+            'tipo_transicao': (sc.get('tipo_transicao') or 'cut'),
+            'template': template,
+            'avatar_pose': pose,
+            'props': props2,
+            'motion': (sc.get('motion') or None),
+        })
+
+    return {
+        'title': title.strip(),
+        'description': description.strip(),
+        'script': script.strip(),
+        'scenes': normalized_scenes,
+    }
+
+
+def _build_nick_br_prompt_v2(brief: str) -> str:
+    prompt_path = os.path.join(BASE_DIR, 'prompts', 'nickinvests-br-meta-prompt.md')
+    meta = _read_text_file(prompt_path) if os.path.exists(prompt_path) else ''
+    catalog = _load_layers_asset_catalog()
+
+    return f"""{meta}\n\n# INPUT BRIEF\n{brief.strip()}\n\n# AVAILABLE LAYERS ASSETS (STRICT)\nTemplates: {catalog['templates']}\nAvatar poses: {catalog['avatar_poses'][:30]}{' ...' if len(catalog['avatar_poses'])>30 else ''}\nProps: {catalog['props'][:60]}{' ...' if len(catalog['props'])>60 else ''}\n\n# OUTPUT FORMAT\nReturn ONLY valid JSON with keys: title, description, script, scenes.\n- scenes must be an array of objects with: texto_narracao, duracao_estimada (2.5-9), template, avatar_pose, props (0-3).\n- Use Portuguese (PT-BR), Nick BR tone: rápido, direto, \"papo reto\", com exemplos, números, e um final com CTA suave.\n- NO markdown, NO comments, NO trailing commas.\n"""
+
+
+def _llm_generate_scene_plan(brief: str) -> dict:
+    if not gemini_client:
+        raise HTTPException(status_code=503, detail='GOOGLE_API_KEY não configurada. Configure GOOGLE_API_KEY no .env para usar o auto-generate.')
+
+    prompt = _build_nick_br_prompt_v2(brief)
+
+    try:
+        resp = gemini_client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.6,
+                max_output_tokens=4096,
+            )
+        )
+        text = resp.text or ''
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f'Falha no LLM (Gemini): {e}')
+
+    raw = _safe_json_extract(text)
+    return _validate_scene_plan(raw)
 
 # --- Serviços Reais ---
 
@@ -722,6 +909,13 @@ async def service_generate_audio_edge_fallback(scenes: List[Scene], voice_alias:
     full_script = " ".join([s.get_narration for s in scenes if s.get_narration])
     
     voice_map = {
+        # Preferências Edge (PT-BR)
+        "Antonio": "pt-BR-AntonioNeural",
+        "Fabio": "pt-BR-FabioNeural",
+        "Francisca": "pt-BR-FranciscaNeural",
+        "Thalita": "pt-BR-ThalitaNeural",
+
+        # Aliases herdados do Gemini (mantém compat com UI antiga)
         "Puck": "pt-BR-AntonioNeural",
         "Charon": "pt-BR-FabioNeural",
         "Kore": "pt-BR-ThalitaNeural",
@@ -790,6 +984,124 @@ def resize_to_fill(clip, target_width, target_height):
         clip = clip.crop(y1=y_center - target_height/2, height=target_height)
         
     return clip
+
+def _asset_path_avatar(avatar_pose: str) -> str:
+    # Preferir pack processado (png com alpha)
+    return os.path.join(
+        BASE_DIR,
+        "assets",
+        "avatars",
+        "marcos_avatar",
+        "whisk_pack_v1_png",
+        f"{avatar_pose}.png",
+    )
+
+
+def _asset_path_prop(prop_name: str) -> str:
+    return os.path.join(
+        BASE_DIR,
+        "assets",
+        "props",
+        "whisk_pack_v1_png",
+        f"{prop_name}.png",
+    )
+
+
+def _load_rgba(path: str) -> Image.Image:
+    im = Image.open(path)
+    if im.mode != "RGBA":
+        im = im.convert("RGBA")
+    return im
+
+
+def _paste_center(dst: Image.Image, src: Image.Image, center_xy: tuple[int, int], scale: float = 1.0):
+    if scale != 1.0:
+        w = max(1, int(src.size[0] * scale))
+        h = max(1, int(src.size[1] * scale))
+        src = src.resize((w, h), Image.LANCZOS)
+    x = int(center_xy[0] - src.size[0] / 2)
+    y = int(center_xy[1] - src.size[1] / 2)
+    dst.alpha_composite(src, (x, y))
+
+
+def _render_layer_scene_to_png(scene: Scene, out_path: str, size=(1280, 720)) -> str:
+    """Renderiza 1 cena (layers) em um PNG (fundo branco) usando avatar + props."""
+    W, H = size
+    canvas = Image.new("RGBA", (W, H), (255, 255, 255, 255))
+
+    template = scene.template or "avatar_center"
+    avatar_pose = scene.avatar_pose or "neutral_arms_crossed"
+    props = scene.props or []
+
+    # Avatar
+    avatar_path = _asset_path_avatar(avatar_pose)
+    if not os.path.exists(avatar_path):
+        raise Exception(f"Avatar pose não encontrada: {avatar_pose} ({avatar_path})")
+    avatar = _load_rgba(avatar_path)
+
+    # Props
+    prop_imgs = []
+    for p in props[:3]:
+        prop_path = _asset_path_prop(p)
+        if not os.path.exists(prop_path):
+            raise Exception(f"Prop não encontrado: {p} ({prop_path})")
+        prop_imgs.append((p, _load_rgba(prop_path)))
+
+    # Layouts simples (MVP)
+    if template == "avatar_center":
+        _paste_center(canvas, avatar, (int(W * 0.65), int(H * 0.55)), scale=1.0)
+        if prop_imgs:
+            _paste_center(canvas, prop_imgs[0][1], (int(W * 0.30), int(H * 0.50)), scale=1.0)
+            if len(prop_imgs) > 1:
+                _paste_center(canvas, prop_imgs[1][1], (int(W * 0.30), int(H * 0.25)), scale=0.8)
+
+    elif template == "avatar_left_prop_right" or template == "avatar_left_prop_right".lower():
+        _paste_center(canvas, avatar, (int(W * 0.25), int(H * 0.58)), scale=1.0)
+        if prop_imgs:
+            _paste_center(canvas, prop_imgs[0][1], (int(W * 0.70), int(H * 0.50)), scale=1.0)
+            if len(prop_imgs) > 1:
+                _paste_center(canvas, prop_imgs[1][1], (int(W * 0.70), int(H * 0.25)), scale=0.8)
+
+    elif template == "avatar_right_prop_left":
+        _paste_center(canvas, avatar, (int(W * 0.75), int(H * 0.58)), scale=1.0)
+        if prop_imgs:
+            _paste_center(canvas, prop_imgs[0][1], (int(W * 0.30), int(H * 0.50)), scale=1.0)
+            if len(prop_imgs) > 1:
+                _paste_center(canvas, prop_imgs[1][1], (int(W * 0.30), int(H * 0.25)), scale=0.8)
+
+    elif template == "icons_with_red_x":
+        _paste_center(canvas, avatar, (int(W * 0.65), int(H * 0.55)), scale=1.0)
+        # Coluna de ícones à esquerda
+        ys = [int(H * 0.25), int(H * 0.45), int(H * 0.65)]
+        for i, (_, pim) in enumerate(prop_imgs[:3]):
+            _paste_center(canvas, pim, (int(W * 0.18), ys[i]), scale=0.8)
+
+    elif template == "metaphor_single_prop":
+        _paste_center(canvas, avatar, (int(W * 0.30), int(H * 0.60)), scale=1.0)
+        if prop_imgs:
+            _paste_center(canvas, prop_imgs[0][1], (int(W * 0.70), int(H * 0.52)), scale=1.15)
+
+    else:
+        # fallback
+        _paste_center(canvas, avatar, (int(W * 0.65), int(H * 0.55)), scale=1.0)
+        if prop_imgs:
+            _paste_center(canvas, prop_imgs[0][1], (int(W * 0.30), int(H * 0.50)), scale=1.0)
+
+    # salvar
+    canvas.convert("RGB").save(out_path, format="PNG", optimize=True)
+    return out_path
+
+
+async def service_generate_layer_images(scenes: List[Scene]):
+    """Gera um PNG por cena usando o motor de layers (assets locais)."""
+    print(f"[Orchestrator] Gerando {len(scenes)} cenas em modo layers (assets locais)...")
+    out_paths = []
+    for scene in scenes:
+        out_path = os.path.join(TEMP_DIR, f"layer_scene_{int(time.time()*1000)}_{scene.id}.png")
+        _render_layer_scene_to_png(scene, out_path)
+        out_paths.append(out_path)
+    return out_paths
+
 
 async def service_render_video(image_paths: List[str], audio_path: str, scenes: List[Scene]):
     """
@@ -893,6 +1205,51 @@ async def get_public_config():
 
 # --- Endpoint Principal ---
 
+
+
+@app.post('/auto-generate', response_model=AutoGenerateResponse)
+async def auto_generate(payload: AutoGenerateRequest):
+    # 1-click flow: brief -> Nick BR plan (JSON) -> render via internal pipeline (layers + Antonio)
+    try:
+        brief = (payload.brief or '').strip()
+        if len(brief) < 10:
+            raise HTTPException(status_code=400, detail='brief muito curto. Explique o tema, promessa e público-alvo (>=10 chars).')
+
+        # Force constraints: no image-gen API calls
+        mode = 'layers'
+        voice_id = payload.voice_id or 'Antonio'
+
+        plan = _llm_generate_scene_plan(brief)
+
+        video_req = VideoGenerationRequest(
+            script=plan.get('script', ''),
+            scenes=[Scene(**sc) for sc in plan.get('scenes', [])],
+            voice_id=voice_id,
+            narration_style='Normal',
+            reference_image_b64=None,
+            mode=mode,
+        )
+
+        video_resp = await generate_video(video_req)
+        if video_resp.status != 'completed':
+            raise Exception(video_resp.message)
+
+        return AutoGenerateResponse(
+            status='completed',
+            title=plan['title'],
+            description=plan['description'],
+            scene_plan=plan,
+            video_url=video_resp.video_url,
+            message='Auto-generate concluído.'
+        )
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return AutoGenerateResponse(status='error', message=str(e))
+
 @app.post("/generate-video", response_model=VideoResponse)
 async def generate_video(payload: VideoGenerationRequest):
     try:
@@ -937,13 +1294,18 @@ async def generate_video(payload: VideoGenerationRequest):
             except Exception as e:
                 print(f"  ⚠️ Erro ao processar imagem de referência: {e}")
         
-        # 5. Gerar Imagens com Nano Banana (Gemini 2.5 Flash Image)
-        image_paths = await service_generate_images(scenes_to_process, reference_image_path)
+        # 5. Gerar imagens (modo images x modo layers)
+        if (payload.mode or "images").lower() == "layers":
+            # Render local por assets (avatar + props)
+            image_paths = await service_generate_layer_images(scenes_to_process)
+        else:
+            # Geração por IA (Seedream) - modo legado
+            image_paths = await service_generate_images(scenes_to_process, reference_image_path)
         
-        # 6. Gerar Audio com Gemini TTS (áudio natural)
+        # 6. Gerar Audio com Gemini TTS (áudio natural) com fallback Edge
         audio_path = await service_generate_audio(scenes_to_process, payload.voice_id)
         
-        # 6. Renderizar Vídeo
+        # 7. Renderizar Vídeo
         video_url = await service_render_video(image_paths, audio_path, scenes_to_process)
         
         return VideoResponse(

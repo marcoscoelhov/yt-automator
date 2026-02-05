@@ -1,0 +1,34 @@
+{
+  "script": "",
+  "voice_id": "Puck",
+  "mode": "layers",
+  "scenes": [
+    {
+      "id": 1,
+      "texto_narracao": "Você não precisa ganhar mais. Você precisa parar de sangrar.",
+      "duracao_estimada": 4,
+      "template": "icons_with_red_x",
+      "avatar_pose": "worried",
+      "props": ["car", "contract", "red_x"],
+      "motion": "slow_zoom_in"
+    },
+    {
+      "id": 2,
+      "texto_narracao": "O problema não é o seu salário. É o seu padrão de decisões.",
+      "duracao_estimada": 4,
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "explaining_hand_up",
+      "props": ["debt_pile"],
+      "motion": "slow_zoom_in"
+    },
+    {
+      "id": 3,
+      "texto_narracao": "E quando você conserta isso, o jogo muda.",
+      "duracao_estimada": 3,
+      "template": "metaphor_single_prop",
+      "avatar_pose": "smiling",
+      "props": ["piggy_bank"],
+      "motion": "slow_zoom_out"
+    }
+  ]
+}

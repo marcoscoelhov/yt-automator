@@ -18,7 +18,9 @@ interface ScriptHistory {
 }
 
 const VOICES = [
-  // Vozes Masculinas
+  // Edge TTS (PT-BR)
+  { id: 'Antonio', name: 'Antonio', desc: 'PT-BR • Masculino • Calmo (Edge)' },
+  // Vozes (Gemini TTS)
   { id: 'Puck', name: 'Puck', desc: 'Masculino • Energético' },
   { id: 'Enceladus', name: 'Enceladus', desc: 'Masculino • Entusiasmado' },
   { id: 'Fenrir', name: 'Fenrir', desc: 'Masculino • Grave/Profundo' },
@@ -44,7 +46,7 @@ export default function App() {
   // Carregar voz favorita do localStorage
   const [voice, setVoice] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.FAVORITE_VOICE);
-    return saved || 'Puck';
+    return saved || 'Antonio';
   });
   const [favoriteVoice, setFavoriteVoice] = useState(() => {
     return localStorage.getItem(STORAGE_KEYS.FAVORITE_VOICE) || '';
@@ -58,6 +60,10 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
 
   const [scriptState, setScriptState] = useState('');
+  const [briefState, setBriefState] = useState('');
+  const [autoTitle, setAutoTitle] = useState<string | null>(null);
+  const [autoDescription, setAutoDescription] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string>('');
   const [progress, setProgress] = useState(0);
@@ -67,6 +73,7 @@ export default function App() {
   const [characterImage, setCharacterImage] = useState<File | null>(null);
   const [characterPreview, setCharacterPreview] = useState<string | null>(null);
   const [pricingConfig, setPricingConfig] = useState<any>(null);
+  const [useLayersMode, setUseLayersMode] = useState(true);
 
   // Carregar configurações do backend
   useEffect(() => {
@@ -137,7 +144,62 @@ export default function App() {
     { id: 5, label: 'Concluído', icon: CheckCircle2 },
   ];
 
-  const handleGenerate = async () => {
+  
+
+  const handleAutoGenerate = async () => {
+    setLoading(true);
+    setProgress(0);
+    setCurrentStep(1);
+    setErrorQuery(null);
+    setVideoUrl(null);
+    setAutoTitle(null);
+    setAutoDescription(null);
+
+    const progressInterval = setInterval(() => {
+      setProgress(p => Math.min(p + 0.4, 95));
+    }, 500);
+
+    try {
+      const brief = briefState.trim();
+      if (!brief) throw new Error('Digite um brief (tema + promessa + público).');
+
+      setStatus('Gerando roteiro + render (1-click)...');
+
+      const response = await fetch('http://localhost:8000/auto-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brief, voice_id: 'Antonio', mode: 'layers' })
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null);
+        throw new Error(err?.detail || err?.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data.status !== 'completed') {
+        throw new Error(data.message || 'Falha no auto-generate');
+      }
+
+      if (data.scene_plan) {
+        setScriptState(JSON.stringify(data.scene_plan, null, 2));
+      }
+      setAutoTitle(data.title || null);
+      setAutoDescription(data.description || null);
+
+      setCurrentStep(5);
+      setProgress(100);
+
+      if (data.video_url) setVideoUrl(data.video_url);
+    } catch (err: any) {
+      setErrorQuery(err.message.includes('Failed to fetch') ? 'Backend offline' : err.message);
+    } finally {
+      clearInterval(progressInterval);
+      setLoading(false);
+    }
+  };
+
+const handleGenerate = async () => {
     setLoading(true);
     setProgress(0);
     setCurrentStep(1);
@@ -164,12 +226,19 @@ export default function App() {
       try {
         const json = JSON.parse(scriptState);
         if (Array.isArray(json)) {
-          payload = { script: "", scenes: json, voice_id: voice, narration_style: "", reference_image_b64: "" };
+          payload = { script: "", scenes: json, voice_id: voice, narration_style: "", reference_image_b64: "", mode: useLayersMode ? "layers" : "images" };
         } else {
-          payload = { script: json.script || "", scenes: json.scenes || [], voice_id: json.voice_id || voice, narration_style: json.narration_style || "", reference_image_b64: "" };
+          payload = {
+            script: json.script || "",
+            scenes: json.scenes || [],
+            voice_id: json.voice_id || voice,
+            narration_style: json.narration_style || "",
+            reference_image_b64: "",
+            mode: (json.mode || (useLayersMode ? "layers" : "images")),
+          };
         }
       } catch {
-        payload = { script: scriptState, scenes: [], voice_id: voice, narration_style: "", reference_image_b64: "" };
+        payload = { script: scriptState, scenes: [], voice_id: voice, narration_style: "", reference_image_b64: "", mode: useLayersMode ? "layers" : "images" };
       }
 
       if (characterImage && characterPreview) {
@@ -327,7 +396,53 @@ export default function App() {
               </div>
             </div>
 
-            {/* Roteiro */}
+            
+
+            {/* 1-click Generate */}
+            <div className="bg-slate-900/50 backdrop-blur-xl rounded-xl border border-white/5 p-4">
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-2">
+                <Zap className="w-3 h-3" />
+                1-click Generate (Brief → vídeo)
+              </label>
+              <textarea
+                className="w-full h-24 bg-slate-950/50 border border-slate-700/50 rounded-lg p-3 text-sm text-slate-200 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 outline-none transition-all placeholder:text-slate-600 resize-none"
+                placeholder="Ex: Tema, promessa, público, dor, CTA..."
+                value={briefState}
+                onChange={(e) => setBriefState(e.target.value)}
+              />
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <div className="text-[10px] text-slate-500">
+                  Gera title + description + scene_plan (Nick BR) e renderiza em <span className="text-emerald-300">layers</span> com voz <span className="text-emerald-300">Antonio</span>.
+                </div>
+                <button
+                  onClick={handleAutoGenerate}
+                  disabled={loading || !briefState.trim()}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] rounded-xl font-semibold shadow-xl shadow-emerald-900/20 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center gap-2 text-sm"
+                  title="Gera tudo e renderiza automaticamente"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Gerando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4" />
+                      <span>1-click Generate</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {(autoTitle || autoDescription) && (
+                <div className="mt-3 p-3 bg-slate-800/40 rounded-lg border border-slate-700/30">
+                  {autoTitle && <div className="text-sm font-semibold text-white mb-1">{autoTitle}</div>}
+                  {autoDescription && <div className="text-xs text-slate-300 whitespace-pre-wrap">{autoDescription}</div>}
+                </div>
+              )}
+            </div>
+
+{/* Roteiro */}
             <div className="bg-slate-900/50 backdrop-blur-xl rounded-xl border border-white/5 p-4">
               <div className="flex items-center justify-between mb-2">
                 <label className="flex items-center gap-2 text-xs font-medium text-slate-400">
@@ -389,21 +504,48 @@ export default function App() {
 
           {/* Painel Direito */}
           <div className="space-y-4">
-            {/* Estimativa de Custos (Novo) */}
+            {/* Estimativa de Custos + Modo (Layers) */}
             {parsedScenes.length > 0 && pricingConfig && (
-              <div className="bg-slate-900/50 backdrop-blur-xl rounded-xl border border-white/5 p-4 flex items-center justify-between">
-                <div>
-                  <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Estimativa de Custo</h3>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold text-emerald-400">
-                      ${(parsedScenes.length * pricingConfig.image_unit_cost_usd).toFixed(2)}
-                    </span>
-                    <span className="text-xs text-slate-500">USD</span>
+              <div className="bg-slate-900/50 backdrop-blur-xl rounded-xl border border-white/5 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Estimativa de Custo</h3>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-bold text-emerald-400">
+                        {useLayersMode ? '$0.00' : `$${(parsedScenes.length * pricingConfig.image_unit_cost_usd).toFixed(2)}`}
+                      </span>
+                      <span className="text-xs text-slate-500">USD</span>
+                    </div>
+                  </div>
+                  <div className="text-right text-xs text-slate-500">
+                    {useLayersMode ? (
+                      <>
+                        <div>Layers: assets locais (sem IA de imagem)</div>
+                        <div>TTS: Edge (Antonio)</div>
+                      </>
+                    ) : (
+                      <>
+                        <div>{parsedScenes.length} cenas x ${pricingConfig.image_unit_cost_usd}</div>
+                        <div>TTS: Gratuito</div>
+                      </>
+                    )}
                   </div>
                 </div>
-                <div className="text-right text-xs text-slate-500">
-                  <div>{parsedScenes.length} cenas x ${pricingConfig.image_unit_cost_usd}</div>
-                  <div>TTS: Gratuito</div>
+
+                <div className="mt-3 flex items-center justify-between bg-slate-800/40 rounded-lg px-3 py-2 border border-slate-700/30">
+                  <div className="text-xs text-slate-300">
+                    <span className="font-semibold">Modo:</span> {useLayersMode ? 'Layers (barato)' : 'Imagens (IA)'}
+                  </div>
+                  <button
+                    onClick={() => setUseLayersMode(v => !v)}
+                    className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${useLayersMode
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                      : 'bg-slate-900/30 border-slate-700/40 text-slate-300'
+                      }`}
+                    title="Alterna entre render por assets (layers) e geração de imagens por IA"
+                  >
+                    {useLayersMode ? 'Layers ON' : 'Layers OFF'}
+                  </button>
                 </div>
               </div>
             )}

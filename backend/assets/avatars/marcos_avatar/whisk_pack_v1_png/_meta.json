@@ -1,0 +1,198 @@
+{
+  "version": 1,
+  "threshold": 245,
+  "files": {
+    "neutral_arms_crossed": {
+      "orig_size": [
+        1344,
+        768
+      ],
+      "crop_bbox": [
+        394,
+        0,
+        999,
+        768
+      ],
+      "out_size": [
+        605,
+        768
+      ]
+    },
+    "thinking_hand_chin": {
+      "orig_size": [
+        1344,
+        768
+      ],
+      "crop_bbox": [
+        0,
+        0,
+        999,
+        768
+      ],
+      "out_size": [
+        999,
+        768
+      ]
+    },
+    "worried": {
+      "orig_size": [
+        1344,
+        768
+      ],
+      "crop_bbox": [
+        0,
+        0,
+        969,
+        768
+      ],
+      "out_size": [
+        969,
+        768
+      ]
+    },
+    "surprised": {
+      "orig_size": [
+        1344,
+        768
+      ],
+      "crop_bbox": [
+        0,
+        0,
+        1305,
+        768
+      ],
+      "out_size": [
+        1305,
+        768
+      ]
+    },
+    "explaining_hand_up": {
+      "orig_size": [
+        1344,
+        768
+      ],
+      "crop_bbox": [
+        0,
+        0,
+        1022,
+        768
+      ],
+      "out_size": [
+        1022,
+        768
+      ]
+    },
+    "pointing": {
+      "orig_size": [
+        1344,
+        768
+      ],
+      "crop_bbox": [
+        0,
+        0,
+        1283,
+        768
+      ],
+      "out_size": [
+        1283,
+        768
+      ]
+    },
+    "shaking_no": {
+      "orig_size": [
+        1344,
+        768
+      ],
+      "crop_bbox": [
+        0,
+        0,
+        1035,
+        768
+      ],
+      "out_size": [
+        1035,
+        768
+      ]
+    },
+    "smiling": {
+      "orig_size": [
+        1344,
+        768
+      ],
+      "crop_bbox": [
+        0,
+        0,
+        1002,
+        768
+      ],
+      "out_size": [
+        1002,
+        768
+      ]
+    },
+    "relieved_exhale": {
+      "orig_size": [
+        1344,
+        768
+      ],
+      "crop_bbox": [
+        0,
+        0,
+        983,
+        768
+      ],
+      "out_size": [
+        983,
+        768
+      ]
+    },
+    "frustrated": {
+      "orig_size": [
+        1344,
+        768
+      ],
+      "crop_bbox": [
+        0,
+        0,
+        995,
+        768
+      ],
+      "out_size": [
+        995,
+        768
+      ]
+    },
+    "fullbody": {
+      "orig_size": [
+        1344,
+        768
+      ],
+      "crop_bbox": [
+        0,
+        0,
+        839,
+        768
+      ],
+      "out_size": [
+        839,
+        768
+      ]
+    },
+    "pushing_pose": {
+      "orig_size": [
+        1344,
+        768
+      ],
+      "crop_bbox": [
+        0,
+        0,
+        1056,
+        768
+      ],
+      "out_size": [
+        1056,
+        768
+      ]
+    }
+  }
+}

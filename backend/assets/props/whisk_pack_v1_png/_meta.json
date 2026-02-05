@@ -1,0 +1,516 @@
+{
+  "version": 1,
+  "threshold": 245,
+  "files": {
+    "moneybag": {
+      "src": "moneybag.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        394,
+        17,
+        1006,
+        750
+      ],
+      "out_size": [
+        612,
+        733
+      ]
+    },
+    "coin_stack": {
+      "src": "coin_stack.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        289,
+        121,
+        1122,
+        667
+      ],
+      "out_size": [
+        833,
+        546
+      ]
+    },
+    "piggy_bank": {
+      "src": "piggy_bank.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        342,
+        110,
+        1066,
+        671
+      ],
+      "out_size": [
+        724,
+        561
+      ]
+    },
+    "debt_pile": {
+      "src": "debt_pile.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        355,
+        24,
+        1052,
+        746
+      ],
+      "out_size": [
+        697,
+        722
+      ]
+    },
+    "receipt": {
+      "src": "receipt.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        477,
+        89,
+        987,
+        681
+      ],
+      "out_size": [
+        510,
+        592
+      ]
+    },
+    "contract": {
+      "src": "contract.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        471,
+        77,
+        942,
+        691
+      ],
+      "out_size": [
+        471,
+        614
+      ]
+    },
+    "briefcase": {
+      "src": "briefcase.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        316,
+        73,
+        1080,
+        695
+      ],
+      "out_size": [
+        764,
+        622
+      ]
+    },
+    "calendar": {
+      "src": "calendar.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        322,
+        79,
+        1074,
+        693
+      ],
+      "out_size": [
+        752,
+        614
+      ]
+    },
+    "warning_sign": {
+      "src": "warning_sign.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        413,
+        126,
+        982,
+        648
+      ],
+      "out_size": [
+        569,
+        522
+      ]
+    },
+    "broken_fridge": {
+      "src": "broken_fridge.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        456,
+        29,
+        919,
+        757
+      ],
+      "out_size": [
+        463,
+        728
+      ]
+    },
+    "car": {
+      "src": "car.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        338,
+        118,
+        1061,
+        662
+      ],
+      "out_size": [
+        723,
+        544
+      ]
+    },
+    "house": {
+      "src": "house.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        404,
+        44,
+        998,
+        725
+      ],
+      "out_size": [
+        594,
+        681
+      ]
+    },
+    "coffee": {
+      "src": "coffee.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        505,
+        80,
+        903,
+        692
+      ],
+      "out_size": [
+        398,
+        612
+      ]
+    },
+    "ramen": {
+      "src": "ramen.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        403,
+        31,
+        989,
+        741
+      ],
+      "out_size": [
+        586,
+        710
+      ]
+    },
+    "up_arrow": {
+      "src": "up_arrow.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        410,
+        33,
+        975,
+        745
+      ],
+      "out_size": [
+        565,
+        712
+      ]
+    },
+    "down_arrow": {
+      "src": "down_arrow.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        449,
+        13,
+        943,
+        755
+      ],
+      "out_size": [
+        494,
+        742
+      ]
+    },
+    "red_x": {
+      "src": "red_x.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        350,
+        63,
+        1042,
+        705
+      ],
+      "out_size": [
+        692,
+        642
+      ]
+    },
+    "green_check": {
+      "src": "green_check.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        379,
+        83,
+        1028,
+        685
+      ],
+      "out_size": [
+        649,
+        602
+      ]
+    },
+    "question_mark": {
+      "src": "question_mark.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        424,
+        11,
+        967,
+        757
+      ],
+      "out_size": [
+        543,
+        746
+      ]
+    },
+    "brain": {
+      "src": "brain.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        337,
+        94,
+        1055,
+        711
+      ],
+      "out_size": [
+        718,
+        617
+      ]
+    },
+    "chart_up": {
+      "src": "chart_up.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        282,
+        81,
+        1126,
+        687
+      ],
+      "out_size": [
+        844,
+        606
+      ]
+    },
+    "chart_down": {
+      "src": "chart_down.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        326,
+        68,
+        1073,
+        700
+      ],
+      "out_size": [
+        747,
+        632
+      ]
+    },
+    "phone_blank": {
+      "src": "phone_blank.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        477,
+        17,
+        925,
+        751
+      ],
+      "out_size": [
+        448,
+        734
+      ]
+    },
+    "phone_balance": {
+      "src": "phone_balance.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        451,
+        5,
+        940,
+        763
+      ],
+      "out_size": [
+        489,
+        758
+      ]
+    },
+    "button_generic": {
+      "src": "button_generic.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        229,
+        197,
+        1172,
+        594
+      ],
+      "out_size": [
+        943,
+        397
+      ]
+    },
+    "airplane": {
+      "src": "airplane.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        156,
+        117,
+        1252,
+        651
+      ],
+      "out_size": [
+        1096,
+        534
+      ]
+    },
+    "fire": {
+      "src": "fire.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        469,
+        68,
+        922,
+        722
+      ],
+      "out_size": [
+        453,
+        654
+      ]
+    },
+    "padlock": {
+      "src": "padlock.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        403,
+        11,
+        989,
+        751
+      ],
+      "out_size": [
+        586,
+        740
+      ]
+    },
+    "paper_stack": {
+      "src": "paper_stack.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        290,
+        104,
+        1112,
+        703
+      ],
+      "out_size": [
+        822,
+        599
+      ]
+    },
+    "savings_jar": {
+      "src": "savings_jar.jpeg",
+      "orig_size": [
+        1408,
+        768
+      ],
+      "crop_bbox": [
+        444,
+        29,
+        935,
+        738
+      ],
+      "out_size": [
+        491,
+        709
+      ]
+    }
+  }
+}
