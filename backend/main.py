@@ -1014,6 +1014,268 @@ def _load_rgba(path: str) -> Image.Image:
     return im
 
 
+def _resample_lanczos():
+    # Pillow 10+: Image.Resampling.LANCZOS
+    try:
+        return Image.Resampling.LANCZOS
+    except Exception:
+        return Image.LANCZOS
+
+
+def _parse_anchor(anchor) -> tuple[str, str]:
+    '''Normaliza anchor em (ax, ay).
+
+    Aceita:
+    - 'left top' | 'center bottom' | 'right center'
+    - ('left','top')
+    '''
+    if isinstance(anchor, (tuple, list)) and len(anchor) == 2:
+        ax, ay = anchor
+    else:
+        s = str(anchor or 'center center').strip().lower().replace('-', ' ')
+        parts = [p for p in s.split() if p]
+        if len(parts) == 1:
+            ax, ay = parts[0], 'center'
+        else:
+            ax, ay = parts[0], parts[1]
+
+    ax = ax if ax in {'left', 'center', 'right'} else 'center'
+    ay = ay if ay in {'top', 'center', 'bottom'} else 'center'
+    return ax, ay
+
+
+def _box_inset(box: tuple[int, int, int, int], dx: int, dy=None) -> tuple[int, int, int, int]:
+    if dy is None:
+        dy = dx
+    x1, y1, x2, y2 = [int(v) for v in box]
+    return (x1 + int(dx), y1 + int(dy), x2 - int(dx), y2 - int(dy))
+
+
+def _bbox_area(b: tuple[int, int, int, int]) -> int:
+    x1, y1, x2, y2 = b
+    return max(0, x2 - x1) * max(0, y2 - y1)
+
+
+def _bbox_intersection_area(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> int:
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    x1 = max(ax1, bx1)
+    y1 = max(ay1, by1)
+    x2 = min(ax2, bx2)
+    y2 = min(ay2, by2)
+    return max(0, x2 - x1) * max(0, y2 - y1)
+
+
+def _bbox_overlap_ratio(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> float:
+    ia = _bbox_intersection_area(a, b)
+    if ia <= 0:
+        return 0.0
+    denom = min(_bbox_area(a), _bbox_area(b))
+    return (ia / denom) if denom > 0 else 0.0
+
+
+def _predict_fit_bbox(
+    dst_size: tuple[int, int],
+    src_size: tuple[int, int],
+    box: tuple[int, int, int, int],
+    anchor='center center',
+    max_upscale: float = 1.0,
+    allow_downscale: bool = True,
+    safe_margin: int = 6,
+) -> tuple[int, int, int, int]:
+    '''Calcula bbox final (sem desenhar).'''
+    W, H = dst_size
+    x1, y1, x2, y2 = [int(v) for v in box]
+    x1, y1 = max(0, x1), max(0, y1)
+    x2, y2 = min(W, x2), min(H, y2)
+
+    m = max(0, int(safe_margin))
+    x1m, y1m, x2m, y2m = x1 + m, y1 + m, x2 - m, y2 - m
+    if x2m <= x1m:
+        x1m, x2m = x1, x2
+    if y2m <= y1m:
+        y1m, y2m = y1, y2
+
+    box_w = max(1, x2m - x1m)
+    box_h = max(1, y2m - y1m)
+    sw, sh = src_size
+    sw = max(1, int(sw))
+    sh = max(1, int(sh))
+
+    fit_scale = min(box_w / sw, box_h / sh)
+    scale = min(float(max_upscale), fit_scale)
+    if not allow_downscale:
+        scale = max(1.0, scale)
+
+    rw = max(1, int(sw * scale))
+    rh = max(1, int(sh * scale))
+    if allow_downscale:
+        rw = min(rw, box_w)
+        rh = min(rh, box_h)
+
+    ax, ay = _parse_anchor(anchor)
+    if ax == 'left':
+        px = x1m
+    elif ax == 'right':
+        px = x2m - rw
+    else:
+        px = int(x1m + (box_w - rw) / 2)
+
+    if ay == 'top':
+        py = y1m
+    elif ay == 'bottom':
+        py = y2m - rh
+    else:
+        py = int(y1m + (box_h - rh) / 2)
+
+    px = max(0, min(int(px), W - rw))
+    py = max(0, min(int(py), H - rh))
+
+    return (px, py, px + rw, py + rh)
+
+
+def paste_fit(
+    dst_img: Image.Image,
+    src_img: Image.Image,
+    box: tuple[int, int, int, int],
+    anchor='center center',
+    max_upscale: float = 1.0,
+    allow_downscale: bool = True,
+):
+    '''Cola src dentro de box preservando aspect ratio.
+
+    - Fit-to-box + safe margins.
+    - LANCZOS.
+    - clamp para não estourar o box.
+    - não permite upscale acima de max_upscale.
+
+    Retorna bbox final (x1,y1,x2,y2).
+    '''
+    W, H = dst_img.size
+    x1, y1, x2, y2 = [int(v) for v in box]
+    x1, y1 = max(0, x1), max(0, y1)
+    x2, y2 = min(W, x2), min(H, y2)
+
+    SAFE_MARGIN = 6
+    m = max(0, int(SAFE_MARGIN))
+    x1m, y1m, x2m, y2m = x1 + m, y1 + m, x2 - m, y2 - m
+    if x2m <= x1m:
+        x1m, x2m = x1, x2
+    if y2m <= y1m:
+        y1m, y2m = y1, y2
+
+    box_w = max(1, x2m - x1m)
+    box_h = max(1, y2m - y1m)
+
+    sw, sh = src_img.size
+    sw = max(1, int(sw))
+    sh = max(1, int(sh))
+
+    fit_scale = min(box_w / sw, box_h / sh)
+    scale = min(float(max_upscale), fit_scale)
+    if not allow_downscale:
+        scale = max(1.0, scale)
+
+    rw = max(1, int(sw * scale))
+    rh = max(1, int(sh * scale))
+
+    resample = _resample_lanczos()
+    resized = src_img.resize((rw, rh), resample=resample) if (rw, rh) != src_img.size else src_img
+
+    # clamp final size to box (cropping se necessário)
+    final_w = min(rw, box_w)
+    final_h = min(rh, box_h)
+
+    ax, ay = _parse_anchor(anchor)
+
+    crop_x = 0
+    if rw > final_w:
+        if ax == 'left':
+            crop_x = 0
+        elif ax == 'right':
+            crop_x = rw - final_w
+        else:
+            crop_x = int((rw - final_w) / 2)
+
+    crop_y = 0
+    if rh > final_h:
+        if ay == 'top':
+            crop_y = 0
+        elif ay == 'bottom':
+            crop_y = rh - final_h
+        else:
+            crop_y = int((rh - final_h) / 2)
+
+    cropped = resized.crop((crop_x, crop_y, crop_x + final_w, crop_y + final_h)) if (crop_x or crop_y or final_w != rw or final_h != rh) else resized
+
+    slack_x = box_w - final_w
+    slack_y = box_h - final_h
+
+    if ax == 'left':
+        px = x1m
+    elif ax == 'right':
+        px = x1m + slack_x
+    else:
+        px = int(x1m + slack_x / 2)
+
+    if ay == 'top':
+        py = y1m
+    elif ay == 'bottom':
+        py = y1m + slack_y
+    else:
+        py = int(y1m + slack_y / 2)
+
+    px = max(0, min(int(px), W - final_w))
+    py = max(0, min(int(py), H - final_h))
+
+    dst_img.alpha_composite(cropped, (px, py))
+    return (px, py, px + final_w, py + final_h)
+
+
+def validate_layout(
+    placements: list[dict],
+    canvas_size: tuple[int, int],
+    clip_margin: int = 2,
+    overlap_threshold: float = 0.20,
+) -> list[str]:
+    '''Validação mínima de layout (warning-only).'''
+    W, H = canvas_size
+    warnings: list[str] = []
+
+    for it in placements:
+        bbox = it.get('bbox')
+        if not bbox:
+            continue
+        x1, y1, x2, y2 = bbox
+        if x1 < -clip_margin or y1 < -clip_margin or x2 > W + clip_margin or y2 > H + clip_margin:
+            warnings.append(f"[Layout] CLIP: {it.get('kind')}:{it.get('name')} bbox={bbox} canvas={(W,H)}")
+
+    for i in range(len(placements)):
+        a = placements[i]
+        ab = a.get('bbox')
+        if not ab:
+            continue
+        for j in range(i + 1, len(placements)):
+            b = placements[j]
+            bb = b.get('bbox')
+            if not bb:
+                continue
+            ka = a.get('kind')
+            kb = b.get('kind')
+            # overlays são feitos para sobrepor, não entram no threshold
+            if ka == 'overlay' or kb == 'overlay':
+                continue
+            r = _bbox_overlap_ratio(ab, bb)
+            if r > overlap_threshold:
+                warnings.append(
+                    f"[Layout] OVERLAP>{overlap_threshold:.0%}: {ka}:{a.get('name')} x {kb}:{b.get('name')} r={r:.0%} a={ab} b={bb}"
+                )
+
+    for w in warnings:
+        print(w)
+    return warnings
+
+
 def _paste_center(dst: Image.Image, src: Image.Image, center_xy: tuple[int, int], scale: float = 1.0):
     if scale != 1.0:
         w = max(1, int(src.size[0] * scale))
