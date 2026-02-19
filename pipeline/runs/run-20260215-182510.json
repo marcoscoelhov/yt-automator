@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "started_at": "2026-02-15T18:23:38.947218+00:00",
+  "finished_at": "2026-02-15T18:25:10.038262+00:00",
+  "trend_source": "x_trends",
+  "trend_error": null,
+  "briefs": [
+    {
+      "rank": 1,
+      "topic": "regra dos R$20.000 para sair do modo sobrevivência",
+      "brief": "Tema principal: regra dos R$20.000 para sair do modo sobrevivência. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: short faceless (8-14 cenas), ritmo rápido, frases curtas, CTA suave no final. Tom: Nick estrito em PT-BR, sem promessas milagrosas."
+    },
+    {
+      "rank": 2,
+      "topic": "7 erros silenciosos que travam sua evolução financeira",
+      "brief": "Tema principal: 7 erros silenciosos que travam sua evolução financeira. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: short faceless (8-14 cenas), ritmo rápido, frases curtas, CTA suave no final. Tom: Nick estrito em PT-BR, sem promessas milagrosas."
+    },
+    {
+      "rank": 3,
+      "topic": "como criar reserva de emergência sem depender de motivação",
+      "brief": "Tema principal: como criar reserva de emergência sem depender de motivação. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: short faceless (8-14 cenas), ritmo rápido, frases curtas, CTA suave no final. Tom: Nick estrito em PT-BR, sem promessas milagrosas."
+    }
+  ],
+  "chosen_brief": {
+    "rank": 1,
+    "topic": "regra dos R$20.000 para sair do modo sobrevivência",
+    "brief": "Tema principal: regra dos R$20.000 para sair do modo sobrevivência. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: short faceless (8-14 cenas), ritmo rápido, frases curtas, CTA suave no final. Tom: Nick estrito em PT-BR, sem promessas milagrosas."
+  },
+  "video": {
+    "title": "A regra dos R$20.000 que tira você do modo sobrevivência",
+    "description": "Você não precisa ficar rico pra respirar. Precisa passar de um número: R$20.000. Entenda o porquê psicológico e o porquê matemático, com um exemplo simples e um plano prático.",
+    "video_url": "http://localhost:8000/static/vsl_final_1771179880.mp4",
+    "video_path": "/root/.openclaw/workspace/yt-automator/backend/static/vsl_final_1771179880.mp4",
+    "outbound_video_path": "/root/.openclaw/media/outbound/vsl_final_1771179880.mp4",
+    "message": "Auto-generate concluído."
+  },
+  "error": null
+}

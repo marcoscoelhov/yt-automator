@@ -1,0 +1,31 @@
+{
+  "ok": false,
+  "started_at": "2026-02-17T11:06:05.399102+00:00",
+  "finished_at": "2026-02-17T11:06:06.002636+00:00",
+  "trend_source": "youtube_intel_file",
+  "trend_error": null,
+  "briefs": [
+    {
+      "rank": 1,
+      "topic": "20 mil mudam seu cérebro financeiro (antes de 1 milhão)",
+      "brief": "Tema principal: 20 mil mudam seu cérebro financeiro (antes de 1 milhão). Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+    },
+    {
+      "rank": 2,
+      "topic": "10 mil que compram paz mental e aceleram sua renda",
+      "brief": "Tema principal: 10 mil que compram paz mental e aceleram sua renda. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+    },
+    {
+      "rank": 3,
+      "topic": "Carro caro: a conta real que ninguém te mostra",
+      "brief": "Tema principal: Carro caro: a conta real que ninguém te mostra. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+    }
+  ],
+  "chosen_brief": {
+    "rank": 1,
+    "topic": "20 mil mudam seu cérebro financeiro (antes de 1 milhão)",
+    "brief": "Tema principal: 20 mil mudam seu cérebro financeiro (antes de 1 milhão). Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+  },
+  "video": null,
+  "error": "502 Server Error: Bad Gateway for url: http://127.0.0.1:8000/auto-generate"
+}

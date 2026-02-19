@@ -1,0 +1,31 @@
+{
+  "ok": false,
+  "started_at": "2026-02-15T18:36:31.227041+00:00",
+  "finished_at": "2026-02-15T18:37:29.520894+00:00",
+  "trend_source": "youtube_intel_file",
+  "trend_error": null,
+  "briefs": [
+    {
+      "rank": 1,
+      "topic": "padrão: vídeos performam melhor quando começam com dor cotidiana + promessa concreta + número-âncora.",
+      "brief": "Tema principal: padrão: vídeos performam melhor quando começam com dor cotidiana + promessa concreta + número-âncora.. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+    },
+    {
+      "rank": 2,
+      "topic": "padrão: o motor de retenção é alternar psicologia + matemática simples + consequência prática.",
+      "brief": "Tema principal: padrão: o motor de retenção é alternar psicologia + matemática simples + consequência prática.. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+    },
+    {
+      "rank": 3,
+      "topic": "padrão: posicionar o público em “sobrevivência vs crescimento” aumenta conexão emocional e watch time.",
+      "brief": "Tema principal: padrão: posicionar o público em “sobrevivência vs crescimento” aumenta conexão emocional e watch time.. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+    }
+  ],
+  "chosen_brief": {
+    "rank": 1,
+    "topic": "padrão: vídeos performam melhor quando começam com dor cotidiana + promessa concreta + número-âncora.",
+    "brief": "Tema principal: padrão: vídeos performam melhor quando começam com dor cotidiana + promessa concreta + número-âncora.. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+  },
+  "video": null,
+  "error": "LLM output is not valid JSON"
+}

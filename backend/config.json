@@ -18,14 +18,6 @@
                     "polling_interval_seconds": 3,
                     "timeout_seconds": 300
                 },
-                "pollinations": {
-                    "base_url": "https://gen.pollinations.ai/image/",
-                    "model": "nanobanana",
-                    "api_key_env": "POLLINATIONS_API_KEY",
-                    "width": 1280,
-                    "height": 720,
-                    "nologo": true
-                },
                 "imagen3": {
                     "model": "imagen-3.0-generate-002",
                     "aspect_ratio": "16:9",

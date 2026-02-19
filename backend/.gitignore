@@ -1,0 +1,5 @@
+# Git - arquivos de credenciais e configurações
+.env
+.env.*
+*.key
+*.pem

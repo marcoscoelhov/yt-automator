@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "started_at": "2026-02-19T11:30:06.095676+00:00",
+  "finished_at": "2026-02-19T11:41:07.556255+00:00",
+  "trend_source": "youtube_fallback",
+  "trend_error": null,
+  "briefs": [
+    {
+      "rank": 1,
+      "topic": "Como chegar nos primeiros R$100 mil sem aumentar salário (estratégia em etapas)",
+      "brief": "Tema principal: Como chegar nos primeiros R$100 mil sem aumentar salário (estratégia em etapas). Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+    },
+    {
+      "rank": 2,
+      "topic": "Os 5 erros que atrasam sua liberdade financeira por anos",
+      "brief": "Tema principal: Os 5 erros que atrasam sua liberdade financeira por anos. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+    },
+    {
+      "rank": 3,
+      "topic": "O plano de 12 meses para sair do caos financeiro e ganhar tração",
+      "brief": "Tema principal: O plano de 12 meses para sair do caos financeiro e ganhar tração. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+    }
+  ],
+  "chosen_brief": {
+    "rank": 1,
+    "topic": "Como chegar nos primeiros R$100 mil sem aumentar salário (estratégia em etapas)",
+    "brief": "Tema principal: Como chegar nos primeiros R$100 mil sem aumentar salário (estratégia em etapas). Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+  },
+  "video": {
+    "title": "Primeiros R$100 mil sem aumentar salário: a estratégia em etapas (papo reto)",
+    "description": "Como chegar nos primeiros R$100 mil sem depender de aumento: etapas claras, virada psicológica (sobrevivência vs crescimento) e um exemplo numérico simples pra você enxergar a aceleração. Sem milagre, só processo.",
+    "video_url": "http://localhost:8000/static/vsl_final_1771501097.mp4",
+    "video_path": "/root/.openclaw/workspace/yt-automator/backend/static/vsl_final_1771501097.mp4",
+    "outbound_video_path": "/root/.openclaw/media/outbound/vsl_final_1771501097.mp4",
+    "message": "Auto-generate concluído."
+  },
+  "error": null
+}

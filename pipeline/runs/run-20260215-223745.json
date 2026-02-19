@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "started_at": "2026-02-15T22:23:35.581630+00:00",
+  "finished_at": "2026-02-15T22:37:45.085082+00:00",
+  "trend_source": "youtube_intel_file",
+  "trend_error": null,
+  "briefs": [
+    {
+      "rank": 1,
+      "topic": "20 mil mudam seu cérebro financeiro (antes de 1 milhão)",
+      "brief": "Tema principal: 20 mil mudam seu cérebro financeiro (antes de 1 milhão). Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+    },
+    {
+      "rank": 2,
+      "topic": "10 mil que compram paz mental e aceleram sua renda",
+      "brief": "Tema principal: 10 mil que compram paz mental e aceleram sua renda. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+    },
+    {
+      "rank": 3,
+      "topic": "Carro caro: a conta real que ninguém te mostra",
+      "brief": "Tema principal: Carro caro: a conta real que ninguém te mostra. Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+    }
+  ],
+  "chosen_brief": {
+    "rank": 1,
+    "topic": "20 mil mudam seu cérebro financeiro (antes de 1 milhão)",
+    "brief": "Tema principal: 20 mil mudam seu cérebro financeiro (antes de 1 milhão). Público: brasileiros 18-40 que querem melhorar vida financeira com linguagem simples. Objetivo do vídeo: gerar alta retenção, didático, com virada psicológica + exemplo numérico simples. Formato: vídeo faceless longo (8-15 minutos), com 48-90 cenas, ritmo dinâmico e mini-viradas a cada 4-6 cenas. Tom: Nick estrito em PT-BR, sem promessas milagrosas, CTA suave no final."
+  },
+  "video": {
+    "title": "R$ 20 mil mudam seu cérebro financeiro (muito antes de R$ 1 milhão)",
+    "description": "Por que R$ 20 mil é o número que tira você do modo sobrevivência e te coloca no modo crescimento. Psicologia + matemática simples, sem promessa milagrosa. Plano prático no final.",
+    "video_url": "http://localhost:8000/static/vsl_final_1771194891.mp4",
+    "video_path": "/root/.openclaw/workspace/yt-automator/backend/static/vsl_final_1771194891.mp4",
+    "outbound_video_path": "/root/.openclaw/media/outbound/vsl_final_1771194891.mp4",
+    "message": "Auto-generate concluído."
+  },
+  "error": null
+}

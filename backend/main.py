@@ -19,7 +19,8 @@ import wave
 import io
 from google import genai
 from google.genai import types
-from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, TextClip
+from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, TextClip, ImageClip
+from moviepy.video.fx import resize, loop
 import edge_tts
 from dotenv import load_dotenv
 import PIL.Image
@@ -62,16 +63,26 @@ def get_config(path: str, default=None):
     return value
 
 print(f"[Config] Carregado: {CONFIG_PATH}")
-print(f"  📷 Imagens: {get_config('services.image_generation.provider', 'pollinations')}")
+print(f"  📷 Imagens: {get_config('services.image_generation.provider', 'seedream')}")
 print(f"  🎙️ TTS: {get_config('services.text_to_speech.provider', 'edge_tts')}")
 print(f"  🎬 Render: {get_config('services.video_rendering.provider', 'moviepy')}")
 
-# Configurar API Key do Google (Gemini) - Novo SDK
+# Configuração de provedores LLM
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+# Mantemos Gemini para recursos auxiliares (TTS/Imagem), mas auto-generate agora usa OpenAI.
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 gemini_client = None
 if GOOGLE_API_KEY:
     gemini_client = genai.Client(api_key=GOOGLE_API_KEY)
     print(f"  ✅ Gemini Client inicializado")
+
+if OPENAI_API_KEY:
+    print(f"  ✅ OpenAI LLM configurado ({OPENAI_MODEL})")
+else:
+    print("  ⚠️ OPENAI_API_KEY ausente: auto-generate LLM ficará indisponível até configurar .env")
 
 # --- Configuração da Aplicação ---
 app = FastAPI(title=get_config("app.name", "SaaS VSL Generator MVP - Real AI"))
@@ -244,6 +255,20 @@ def _validate_scene_plan(plan: dict) -> dict:
     allowed_poses = set(catalog['avatar_poses'])
     allowed_props = set(catalog['props'])
 
+    # FIX 1: Expansões contextuais para cenas curtas
+    CONTEXTUAL_EXPANSIONS = [
+        "Esse detalhe faz toda diferença quando você aplica na prática.",
+        "Isso é algo que poucos percebem, mas muda o resultado final.",
+        "Se você prestar atenção nisso, vai evitar o erro mais comum.",
+        "Quando você entende esse ponto, o próximo passo fica natural.",
+        "Aqui está o segredo que ninguém conta: consistência vence intensidade.",
+        "Observe como isso se conecta com sua rotina financeira atual.",
+        "Esse princípio funciona porque mexe com decisões, não só com dinheiro.",
+        "Aplique isso por 30 dias e compare com o mês anterior.",
+        "É simples, mas exige disciplina diária. E funciona.",
+        "Quando você domina isso, ganha liberdade de escolha.",
+    ]
+
     normalized_scenes = []
     for i, sc in enumerate(scenes, start=1):
         if not isinstance(sc, dict):
@@ -252,6 +277,14 @@ def _validate_scene_plan(plan: dict) -> dict:
         texto = (sc.get('texto_narracao') or sc.get('description') or '').strip()
         if len(texto) < 5:
             raise Exception(f'Scene {i} missing texto_narracao')
+
+        # FIX 1: Garantir mínimo de 150 caracteres com expansão contextual
+        if len(texto) < 150:
+            expansion = CONTEXTUAL_EXPANSIONS[i % len(CONTEXTUAL_EXPANSIONS)]
+            texto = f"{texto} {expansion}"
+            if len(texto) < 150:
+                # Se ainda estiver curto, adicionar mais uma expansão
+                texto = f"{texto} {CONTEXTUAL_EXPANSIONS[(i+1) % len(CONTEXTUAL_EXPANSIONS)]}"
 
         dur = sc.get('duracao_estimada') or sc.get('duration_est') or 5.0
         try:
@@ -299,35 +332,213 @@ def _validate_scene_plan(plan: dict) -> dict:
     }
 
 
+def _build_fallback_scene_plan(brief: str, long_form: bool = True) -> dict:
+    """Plano de contingência quando o LLM não retorna JSON válido."""
+    catalog = _load_layers_asset_catalog()
+    template = (catalog.get('templates') or ['avatar_left_prop_right'])[0]
+    pose = (catalog.get('avatar_poses') or ['neutral_arms_crossed'])[0]
+
+    theme = (brief or '').strip()
+    if 'Tema principal:' in theme:
+        theme = theme.split('Tema principal:', 1)[1].split('.', 1)[0].strip()
+    if not theme:
+        theme = 'como sair do modo sobrevivência financeira'
+
+    scene_count = 72 if long_form else 18
+    dur = 7.5 if long_form else 5.5
+
+    beats = [
+        'Você sente que trabalha muito e o dinheiro nunca sobra.',
+        'Hoje eu vou te mostrar a virada em passos simples e práticos.',
+        'Primeiro, entenda o erro invisível que trava sua evolução.',
+        'Agora vem a conta simples que quase ninguém faz.',
+        'Quando você muda esse padrão, sua margem financeira aparece.',
+        'Com margem, você ganha poder de escolha no trabalho e na vida.',
+        'Sem consistência, qualquer plano quebra no meio do caminho.',
+        'Com um método claro, você acelera sem depender de motivação.',
+    ]
+
+    # FIX 1: Expansões contextuais para garantir 150+ chars
+    CONTEXTUAL_EXPANSIONS = [
+        "Esse detalhe faz toda diferença quando você aplica na prática.",
+        "Isso é algo que poucos percebem, mas muda o resultado final.",
+        "Se você prestar atenção nisso, vai evitar o erro mais comum.",
+    ]
+
+    scenes = []
+    for i in range(scene_count):
+        beat = beats[i % len(beats)]
+        texto_base = f"{beat} Aplicação no tema: {theme}."
+        
+        # FIX 1: Garantir mínimo de 150 caracteres
+        if len(texto_base) < 150:
+            texto_base = f"{texto_base} {CONTEXTUAL_EXPANSIONS[i % len(CONTEXTUAL_EXPANSIONS)]}"
+        
+        scenes.append({
+            'id': i + 1,
+            'texto_narracao': texto_base,
+            'prompt_visual': None,
+            'duracao_estimada': dur,
+            'tipo_transicao': 'cut',
+            'template': template,
+            'avatar_pose': pose,
+            'props': [],
+            'motion': None,
+        })
+
+    return {
+        'title': f"{theme[:72]}".strip().capitalize(),
+        'description': 'Plano prático em linguagem simples para melhorar decisão e execução financeira.',
+        'script': ' '.join(s['texto_narracao'] for s in scenes),
+        'scenes': scenes,
+    }
+
+
+def _enforce_target_duration(plan: dict, min_sec: float = 480.0, max_sec: float = 900.0) -> dict:
+    scenes = plan.get('scenes') or []
+    if not scenes:
+        return plan
+
+    # FIX 4: Expansões variadas relacionadas a finanças pessoais
+    INTELLIGENT_EXPANSIONS = [
+        "Respira e observa: se você aplicar isso por 30 dias, a diferença aparece no caixa e na sua decisão.",
+        "Muita gente ignora esse passo, mas é exatamente ele que separa quem sai do vermelho de quem fica preso.",
+        "Quando você domina isso, percebe que o problema nunca foi falta de dinheiro, mas falta de método.",
+        "Esse conceito parece óbvio, mas 9 em cada 10 pessoas não fazem na prática.",
+        "Se você só lembrar de uma coisa desse vídeo, lembra disso: consistência vence inteligência sem execução.",
+        "Eu sei que parece simples demais, mas os resultados provam que funciona melhor que qualquer atalho.",
+        "Agora aplica isso na sua rotina hoje. Começa pequeno, mas começa agora.",
+        "O erro clássico é querer o resultado sem mudar o processo. Aqui você muda o processo.",
+        "Isso não é teoria de livro: é o que realmente funciona quando você testa na vida real.",
+        "Presta atenção nesse detalhe, porque ele vai economizar meses de tentativa e erro.",
+        "Quando você internaliza isso, as decisões financeiras ficam automáticas e menos estressantes.",
+        "Se você chegou até aqui, já está na frente de quem desiste no primeiro obstáculo.",
+    ]
+
+    total = sum(float(s.get('duracao_estimada') or 0) for s in scenes)
+
+    # alonga quando está curto
+    if total < min_sec and total > 0:
+        factor = min_sec / total
+        for i, s in enumerate(scenes):
+            d = float(s.get('duracao_estimada') or 5.0)
+            s['duracao_estimada'] = max(6.5, min(12.0, d * factor))
+            
+            # FIX 4: Expansão inteligente baseada no contexto
+            txt = (s.get('texto_narracao') or '').strip()
+            if txt and len(txt) < 180:
+                expansion = INTELLIGENT_EXPANSIONS[i % len(INTELLIGENT_EXPANSIONS)]
+                s['texto_narracao'] = f"{txt} {expansion}"
+        
+        total = sum(float(s.get('duracao_estimada') or 0) for s in scenes)
+
+    # se ainda estiver curto, duplica cenas até bater mínimo
+    i = 0
+    while total < min_sec and len(scenes) < 120:
+        base = scenes[i % len(scenes)].copy()
+        base['id'] = len(scenes) + 1
+        
+        # FIX 4: Usar expansões variadas ao duplicar
+        expansion = INTELLIGENT_EXPANSIONS[(i + 3) % len(INTELLIGENT_EXPANSIONS)]
+        base['texto_narracao'] = (base.get('texto_narracao') or '').strip() + f" {expansion}"
+        base['duracao_estimada'] = max(5.0, min(12.0, float(base.get('duracao_estimada') or 7.0)))
+        scenes.append(base)
+        total += float(base['duracao_estimada'])
+        i += 1
+
+    # comprime quando está muito longo
+    if total > max_sec and total > 0:
+        factor = max_sec / total
+        for s in scenes:
+            d = float(s.get('duracao_estimada') or 7.0)
+            s['duracao_estimada'] = max(5.0, min(12.0, d * factor))
+
+    plan['scenes'] = scenes
+    plan['script'] = ' '.join((s.get('texto_narracao') or '') for s in scenes)
+    return plan
+
+
 def _build_nick_br_prompt_v2(brief: str) -> str:
     prompt_path = os.path.join(BASE_DIR, 'prompts', 'nickinvests-br-meta-prompt.md')
     meta = _read_text_file(prompt_path) if os.path.exists(prompt_path) else ''
     catalog = _load_layers_asset_catalog()
 
-    return f"""{meta}\n\n# INPUT BRIEF\n{brief.strip()}\n\n# AVAILABLE LAYERS ASSETS (STRICT)\nTemplates: {catalog['templates']}\nAvatar poses: {catalog['avatar_poses'][:30]}{' ...' if len(catalog['avatar_poses'])>30 else ''}\nProps: {catalog['props'][:60]}{' ...' if len(catalog['props'])>60 else ''}\n\n# OUTPUT FORMAT\nReturn ONLY valid JSON with keys: title, description, script, scenes.\n- scenes must be an array of objects with: texto_narracao, duracao_estimada (2.5-9), template, avatar_pose, props (0-3).\n- Use Portuguese (PT-BR), Nick BR tone: rápido, direto, \"papo reto\", com exemplos, números, e um final com CTA suave.\n- NO markdown, NO comments, NO trailing commas.\n"""
+    # FIX 3: Regras semânticas de matching visual
+    visual_matching_rules = """
+# REGRAS DE MATCHING VISUAL (obrigatório)
+- Quando a narração fala de DINHEIRO/VALOR/PREÇO → props: moneybag, coin_stack, piggy_bank | poses: explaining_hand_up, pointing
+- Quando fala de PROBLEMA/ERRO/PERDA → props: warning_sign, red_x, chart_down | poses: worried, frustrated, shaking_no
+- Quando fala de SOLUÇÃO/GANHO/CRESCIMENTO → props: chart_up, green_check, up_arrow | poses: smiling, relieved_exhale
+- Quando fala de TRABALHO/CARREIRA → props: briefcase, contract, calendar | poses: neutral_arms_crossed, thinking_hand_chin
+- Quando fala de LUXO/GASTO → props: car, house, airplane | poses: surprised, pushing_pose
+- Quando fala de ECONOMIA/POUPANÇA → props: piggy_bank, savings_jar, coin_stack | poses: explaining_hand_up, thinking_hand_chin
+- Quando fala de COMIDA/BÁSICO → props: ramen, coffee, receipt | poses: worried, frustrated
+- Quando fala de PERGUNTA/DÚVIDA → props: question_mark, brain | poses: thinking_hand_chin, surprised
+- NUNCA repetir a mesma combinação template+pose+prop em cenas consecutivas
+- Variar entre os 5 templates disponíveis ao longo do vídeo
+"""
+
+    return f"""{meta}\n\n# INPUT BRIEF\n{brief.strip()}\n\n# AVAILABLE LAYERS ASSETS (STRICT)\nTemplates: {catalog['templates']}\nAvatar poses: {catalog['avatar_poses'][:30]}{' ...' if len(catalog['avatar_poses'])>30 else ''}\nProps: {catalog['props'][:60]}{' ...' if len(catalog['props'])>60 else ''}\n\n{visual_matching_rules}\n\n# OUTPUT FORMAT\nReturn ONLY valid JSON with keys: title, description, script, scenes.\n- scenes must be an array of objects with: texto_narracao, duracao_estimada (5-12), template, avatar_pose, props (0-3).\n- Use Portuguese (PT-BR), Nick BR tone: rápido, direto, \"papo reto\", com exemplos, números, e um final com CTA suave.\n- NO markdown, NO comments, NO trailing commas.\n"""
 
 
 def _llm_generate_scene_plan(brief: str) -> dict:
-    if not gemini_client:
-        raise HTTPException(status_code=503, detail='GOOGLE_API_KEY não configurada. Configure GOOGLE_API_KEY no .env para usar o auto-generate.')
+    """Gera plano de cenas via OpenAI (primário para auto-generate)."""
+    if not OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail='OPENAI_API_KEY não configurada. Configure OPENAI_API_KEY no .env para usar o auto-generate via OpenAI.'
+        )
 
     prompt = _build_nick_br_prompt_v2(brief)
+    # Vídeos longos (8-15min) exigem JSON maior; evita truncar saída.
+    is_long_form = ('8-15' in brief or '8–15' in brief)
+    max_tokens = 12000 if is_long_form else 4096
 
     try:
-        resp = gemini_client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.6,
-                max_output_tokens=4096,
-            )
+        resp = requests.post(
+            f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": OPENAI_MODEL,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "Você é um gerador de roteiro JSON estrito. Responda apenas JSON válido sem markdown."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    },
+                ],
+                "temperature": 0.6,
+                "max_completion_tokens": max_tokens,
+                "response_format": {"type": "json_object"},
+            },
+            timeout=180,
         )
-        text = resp.text or ''
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f'Falha no LLM (Gemini): {e}')
 
-    raw = _safe_json_extract(text)
-    return _validate_scene_plan(raw)
+        if resp.status_code >= 400:
+            raise Exception(f"HTTP {resp.status_code}: {resp.text[:400]}")
+
+        data = resp.json()
+        text = ((data.get('choices') or [{}])[0].get('message') or {}).get('content') or ''
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f'Falha no LLM (OpenAI): {e}')
+
+    try:
+        raw = _safe_json_extract(text)
+        plan = _validate_scene_plan(raw)
+    except Exception as e:
+        print(f"[AutoGenerate] fallback acionado: {e}")
+        plan = _build_fallback_scene_plan(brief, long_form=is_long_form)
+
+    if is_long_form:
+        plan = _enforce_target_duration(plan, min_sec=480.0, max_sec=900.0)
+
+    return plan
 
 # --- Serviços Reais ---
 
@@ -341,7 +552,7 @@ async def service_gemini_script_refinement(script: str):
         return script
 
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash')
         response = model.generate_content(f"Melhore este roteiro para um vídeo VSL de alta conversão. Mantenha o mesmo tamanho aprox: {script}")
         return response.text
     except Exception as e:
@@ -621,150 +832,9 @@ async def generate_single_image_seedream(scene: Scene, img_config: dict, referen
         return (scene.id, None)
 
 
-async def generate_single_image_nanobanana(scene: Scene, img_config: dict, reference_image_path: str = None) -> tuple:
-    """Gera uma única imagem com Nano Banana (Gemini 2.5 Flash Image) - Wrapper Async"""
-    def _generate_sync():
-        try:
-            if not gemini_client:
-                raise Exception("Gemini client não inicializado. Verifique GOOGLE_API_KEY.")
-            
-            visual_prompt = scene.get_visual_prompt
-            # Extrair POSITIVE PROMPT
-            if "POSITIVE PROMPT:" in visual_prompt:
-                start = visual_prompt.find("POSITIVE PROMPT:") + len("POSITIVE PROMPT:")
-                end = visual_prompt.find("NEGATIVE PROMPT:") if "NEGATIVE PROMPT:" in visual_prompt else len(visual_prompt)
-                visual_prompt = visual_prompt[start:end].strip()
-            
-            print(f"  🎨 Cena {scene.id}: {visual_prompt[:60]}...")
-            
-            # Preparar conteúdo: prompt + imagem de referência (se existir)
-            contents = []
-            
-            if reference_image_path and os.path.exists(reference_image_path):
-                ref_image = PIL.Image.open(reference_image_path)
-                # Instrução explícita para usar o personagem da referência
-                character_instruction = (
-                    "IMPORTANT: Use the character from the reference image below as the MAIN CHARACTER in this scene. "
-                    "Keep the same character design, face, body proportions, clothing style, and colors. "
-                    "The character must be clearly recognizable as the same person from the reference. "
-                    "Reference image:"
-                )
-                contents = [character_instruction, ref_image, f"\n\nScene to generate: {visual_prompt}"]
-                print(f"    📷 Usando personagem de referência: {os.path.basename(reference_image_path)}")
-            else:
-                contents = [visual_prompt]
-            
-            # Gerar imagem com Nano Banana
-            response = gemini_client.models.generate_content(
-                model="gemini-2.5-flash-image",
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    response_modalities=["IMAGE", "TEXT"],
-                )
-            )
-            
-            # Extrair imagem da resposta
-            for part in response.candidates[0].content.parts:
-                if hasattr(part, 'inline_data') and part.inline_data:
-                    filename = f"scene_{int(time.time())}_{scene.id}.png"
-                    filepath = os.path.join(TEMP_DIR, filename)
-                    
-                    # Salvar imagem
-                    image_data = part.inline_data.data
-                    with open(filepath, "wb") as f:
-                        f.write(image_data)
-                    
-                    print(f"  ✅ Cena {scene.id} gerada (Nano Banana)")
-                    return (scene.id, filepath)
-            
-            print(f"  ⚠️ Cena {scene.id}: Nenhuma imagem retornada")
-            return (scene.id, None)
-            
-        except Exception as e:
-            print(f"  ❌ Cena {scene.id} erro: {e}")
-            return (scene.id, None)
-
-    return await asyncio.to_thread(_generate_sync)
-
-async def generate_single_image_pollinations(scene: Scene, img_config: dict, reference_image_path: str = None) -> tuple:
-    """Gera uma única imagem com Pollinations API - Wrapper Async com retry"""
-    def _generate_sync():
-        visual_prompt = scene.get_visual_prompt
-        if "POSITIVE PROMPT:" in visual_prompt:
-            start = visual_prompt.find("POSITIVE PROMPT:") + len("POSITIVE PROMPT:")
-            end = visual_prompt.find("NEGATIVE PROMPT:") if "NEGATIVE PROMPT:" in visual_prompt else len(visual_prompt)
-            visual_prompt = visual_prompt[start:end].strip()
-        
-        base_url = img_config.get("base_url", "https://gen.pollinations.ai/image/")
-        model = img_config.get("model", "turbo")
-        width = img_config.get("width", 1280)
-        height = img_config.get("height", 720)
-        api_key = os.getenv("POLLINATIONS_API_KEY", "")
-        
-        # Se tem referência, adicionar instrução detalhada no prompt
-        # NOTA: Pollinations não suporta base64 inline (causa HTTP 414)
-        if reference_image_path and os.path.exists(reference_image_path):
-            # Adicionar instrução no prompt para manter consistência
-            visual_prompt = f"Maintain consistent character design throughout. Scene: {visual_prompt}"
-        
-        encoded_prompt = requests.utils.quote(visual_prompt)
-        url = f"{base_url}{encoded_prompt}?width={width}&height={height}&model={model}&seed={scene.id}&nologo=true"
-        
-        # Headers com Bearer token
-        headers = {}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-        
-        # Retry com backoff exponencial para rate limit (429)
-        max_retries = 3
-        retry_delays = [5, 10, 20]  # Segundos entre tentativas
-        
-        for attempt in range(max_retries + 1):
-            try:
-                if attempt == 0:
-                    print(f"  🎨 Cena {scene.id} ({model}): {visual_prompt[:45]}...")
-                else:
-                    print(f"  🔄 Cena {scene.id}: Retry {attempt}/{max_retries}...")
-                
-                response = requests.get(url, headers=headers, timeout=120)
-                
-                if response.status_code == 200:
-                    content_type = response.headers.get("content-type", "image/jpeg")
-                    ext = "png" if "png" in content_type else "jpg"
-                    filename = f"scene_{int(time.time())}_{scene.id}.{ext}"
-                    filepath = os.path.join(TEMP_DIR, filename)
-                    with open(filepath, "wb") as f:
-                        f.write(response.content)
-                    print(f"  ✅ Cena {scene.id} gerada ({model})")
-                    return (scene.id, filepath)
-                
-                elif response.status_code == 429:
-                    # Rate limit - aguardar e tentar novamente
-                    if attempt < max_retries:
-                        delay = retry_delays[attempt]
-                        print(f"  ⏳ Cena {scene.id}: Rate limit, aguardando {delay}s...")
-                        time.sleep(delay)
-                        continue
-                    else:
-                        print(f"  ❌ Cena {scene.id}: Rate limit persistente após {max_retries} tentativas")
-                        return (scene.id, None)
-                else:
-                    print(f"  ❌ Cena {scene.id} falhou: HTTP {response.status_code}")
-                    return (scene.id, None)
-                    
-            except requests.exceptions.Timeout:
-                if attempt < max_retries:
-                    print(f"  ⏳ Cena {scene.id}: Timeout, tentando novamente...")
-                    continue
-                print(f"  ❌ Cena {scene.id}: Timeout após {max_retries} tentativas")
-                return (scene.id, None)
-            except Exception as e:
-                print(f"  ❌ Cena {scene.id} erro: {e}")
-                return (scene.id, None)
-        
-        return (scene.id, None)
-
-    return await asyncio.to_thread(_generate_sync)
+    # [REMOVED] generate_single_image_nanobanana (Pollinations) - instável, HTTP 530
+    # [REMOVED] generate_single_image_pollinations - removido por instabilidade
+    # Provider único: Seedream 4.5 via Kie.ai (generate_single_image_seedream)
 
 async def service_generate_images(scenes: List[Scene], reference_image_path: str = None):
     """
@@ -818,10 +888,37 @@ async def service_generate_images(scenes: List[Scene], reference_image_path: str
     
     return image_paths
 
+def _ensure_minimum_audio_duration(audio_path: str, min_sec: float = 480.0) -> tuple[bool, float]:
+    """
+    FIX 2: Verifica se o áudio gerado tem duração mínima.
+    
+    Retorna:
+        (is_valid, actual_duration)
+    """
+    try:
+        audio_clip = AudioFileClip(audio_path)
+        duration = audio_clip.duration
+        audio_clip.close()
+        
+        is_valid = duration >= min_sec
+        
+        if not is_valid:
+            print(f"  ⚠️ Duração do áudio abaixo do mínimo: {duration:.1f}s < {min_sec:.1f}s")
+        else:
+            print(f"  ✅ Duração do áudio válida: {duration:.1f}s >= {min_sec:.1f}s")
+        
+        return (is_valid, duration)
+    except Exception as e:
+        print(f"  ❌ Erro ao verificar duração do áudio: {e}")
+        return (False, 0.0)
+
+
 async def service_generate_audio(scenes: List[Scene], voice_alias: str):
     """
     Gera áudio usando Gemini TTS (áudio natural) com fallback para Edge TTS.
     Modelo: gemini-2.5-flash-preview-tts
+    
+    FIX 2: Valida duração real do áudio após geração.
     """
     if not gemini_client:
         print("  ⚠️ Gemini client não disponível. Usando Edge TTS...")
@@ -895,6 +992,12 @@ async def service_generate_audio(scenes: List[Scene], voice_alias: str):
         
         file_size = os.path.getsize(output_path)
         print(f"  ✅ Áudio Gemini TTS gerado: {target_voice} ({file_size / 1024:.1f} KB)")
+        
+        # FIX 2: Validar duração do áudio gerado
+        is_valid, actual_duration = _ensure_minimum_audio_duration(output_path, min_sec=480.0)
+        if not is_valid:
+            print(f"  ⚠️ Áudio muito curto ({actual_duration:.1f}s). Considere adicionar mais conteúdo nas cenas.")
+        
         return output_path
         
     except Exception as e:
@@ -940,6 +1043,12 @@ async def service_generate_audio_edge_fallback(scenes: List[Scene], voice_alias:
     
     file_size = os.path.getsize(output_path)
     print(f"  ✅ Áudio Edge TTS gerado: {target_voice} ({file_size / 1024:.1f} KB)")
+    
+    # FIX 2: Validar duração do áudio gerado
+    is_valid, actual_duration = _ensure_minimum_audio_duration(output_path, min_sec=480.0)
+    if not is_valid:
+        print(f"  ⚠️ Áudio muito curto ({actual_duration:.1f}s). Considere adicionar mais conteúdo nas cenas.")
+    
     return output_path
 
 # Função legada removida - agora temos Gemini TTS + Edge TTS fallback
@@ -1579,29 +1688,82 @@ async def auto_generate(payload: AutoGenerateRequest):
         mode = 'layers'
         voice_id = payload.voice_id or 'Antonio'
 
-        plan = _llm_generate_scene_plan(brief)
+        # FIX 2: Tentar gerar com retry se duração ficar curta
+        max_attempts = 2
+        last_error = None
+        
+        for attempt in range(max_attempts):
+            try:
+                # Se for retry, reforçar o prompt
+                current_brief = brief
+                if attempt > 0:
+                    print(f"\n  🔄 Tentativa {attempt + 1}/{max_attempts}: Reforçando prompt para gerar mais conteúdo...")
+                    current_brief = f"""{brief}
 
-        video_req = VideoGenerationRequest(
-            script=plan.get('script', ''),
-            scenes=[Scene(**sc) for sc in plan.get('scenes', [])],
-            voice_id=voice_id,
-            narration_style='Normal',
-            reference_image_b64=None,
-            mode=mode,
-        )
+ATENÇÃO: O vídeo anterior ficou muito curto. OBRIGATÓRIO:
+- Cada cena deve ter PELO MENOS 200 caracteres de texto_narracao
+- Gerar NO MÍNIMO 60 cenas para atingir 8-15 minutos de duração
+- Expandir exemplos práticos, casos reais e detalhamento de cada passo
+- Não usar texto genérico: cada cena deve ter conteúdo específico e útil"""
 
-        video_resp = await generate_video(video_req)
-        if video_resp.status != 'completed':
-            raise Exception(video_resp.message)
+                plan = _llm_generate_scene_plan(current_brief)
+                
+                # Criar request de vídeo
+                scenes_objs = [Scene(**sc) for sc in plan.get('scenes', [])]
+                
+                # Gerar áudio primeiro para validar duração (economiza processamento de vídeo)
+                print("\n[Pre-check] Gerando áudio para validar duração...")
+                test_audio = await service_generate_audio(scenes_objs, voice_id)
+                
+                # FIX 2: Validar duração do áudio
+                is_valid, actual_duration = _ensure_minimum_audio_duration(test_audio, min_sec=480.0)
+                
+                if not is_valid and attempt < max_attempts - 1:
+                    print(f"\n  ⚠️ Duração insuficiente: {actual_duration:.1f}s < 480s. Tentando gerar novamente...")
+                    # Limpar arquivo temporário
+                    if os.path.exists(test_audio):
+                        os.remove(test_audio)
+                    continue  # Retry
+                
+                # Se chegou aqui, ou a duração é válida ou já esgotamos as tentativas
+                # Gerar vídeo completo
+                video_req = VideoGenerationRequest(
+                    script=plan.get('script', ''),
+                    scenes=scenes_objs,
+                    voice_id=voice_id,
+                    narration_style='Normal',
+                    reference_image_b64=None,
+                    mode=mode,
+                )
 
-        return AutoGenerateResponse(
-            status='completed',
-            title=plan['title'],
-            description=plan['description'],
-            scene_plan=plan,
-            video_url=video_resp.video_url,
-            message='Auto-generate concluído.'
-        )
+                video_resp = await generate_video(video_req)
+                if video_resp.status != 'completed':
+                    raise Exception(video_resp.message)
+
+                # Avisar se ficou curto mas conseguimos gerar
+                message = 'Auto-generate concluído.'
+                if not is_valid:
+                    message = f'Auto-generate concluído com duração de {actual_duration:.1f}s (abaixo do alvo de 8min). Considere adicionar mais conteúdo no brief.'
+
+                return AutoGenerateResponse(
+                    status='completed',
+                    title=plan['title'],
+                    description=plan['description'],
+                    scene_plan=plan,
+                    video_url=video_resp.video_url,
+                    message=message
+                )
+                
+            except Exception as e:
+                last_error = e
+                if attempt < max_attempts - 1:
+                    print(f"\n  ⚠️ Erro na tentativa {attempt + 1}: {e}")
+                    continue
+                else:
+                    raise
+
+        # Se chegou aqui, todas as tentativas falharam
+        raise last_error or Exception("Falha em todas as tentativas de geração")
 
     except HTTPException as e:
         raise e
@@ -1684,7 +1846,7 @@ async def generate_video(payload: VideoGenerationRequest):
 
 @app.get("/health")
 def health_check():
-    return {"status": "backend_v1_ready", "ai_engine": "pollinations_edge_gemini"}
+    return {"status": "backend_v1_ready", "ai_engine": "seedream_edge_gemini"}
 
 if __name__ == "__main__":
     import uvicorn
