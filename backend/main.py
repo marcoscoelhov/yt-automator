@@ -1130,9 +1130,9 @@ def validate_audio_quality(audio_path: str, min_duration_sec: float = 30.0) -> t
         except ImportError:
             # Sem pydub, fazer validação básica com moviepy
             print(f"  ⚠️ pydub não disponível, usando validação básica")
-            if duration < 10:
+            if duration < min_duration_sec:
                 audio_clip.close()
-                return (False, f"Áudio muito curto: {duration:.1f}s")
+                return (False, f"Áudio muito curto: {duration:.1f}s < {min_duration_sec}s")
             print(f"  ✅ Áudio validado (básico): {duration:.1f}s")
         
         audio_clip.close()
