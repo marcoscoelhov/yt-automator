@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -342,12 +343,121 @@ def _validate_scene_plan(plan: dict) -> dict:
             'motion': (sc.get('motion') or None),
         })
 
+    # FIX 4: Validador de coerência visual pós-LLM
+    normalized_scenes = _validate_scene_coherence(normalized_scenes, catalog)
+
     return {
         'title': title.strip(),
         'description': description.strip(),
         'script': script.strip(),
         'scenes': normalized_scenes,
     }
+
+
+# ---------------------------------------------------------------------------
+# Validador de coerência visual (sem LLM, keyword-based)
+# ---------------------------------------------------------------------------
+
+_SEMANTIC_RULES: list[tuple[list[str], list[str], list[str]]] = [
+    # (keywords na narração, props esperados, poses esperadas)
+    (['dinheiro', 'valor', 'preço', 'custo', 'real', 'reais', 'salário', 'renda'],
+     ['moneybag', 'coin_stack', 'piggy_bank'],
+     ['explaining_hand_up', 'pointing']),
+    (['problema', 'erro', 'perda', 'prejuízo', 'dívida', 'perder', 'cuidado'],
+     ['warning_sign', 'red_x', 'chart_down'],
+     ['worried', 'frustrated', 'shaking_no']),
+    (['solução', 'ganho', 'crescimento', 'lucro', 'resultado', 'subir', 'crescer'],
+     ['chart_up', 'green_check', 'up_arrow'],
+     ['smiling', 'relieved_exhale']),
+    (['trabalho', 'carreira', 'emprego', 'profissão', 'empresa'],
+     ['briefcase', 'contract', 'calendar'],
+     ['neutral_arms_crossed', 'thinking_hand_chin']),
+    (['luxo', 'gasto', 'comprar', 'gastar', 'consumo'],
+     ['car', 'house', 'airplane'],
+     ['surprised', 'pushing_pose']),
+    (['economia', 'poupança', 'poupar', 'guardar', 'economizar', 'reserva'],
+     ['piggy_bank', 'savings_jar', 'coin_stack'],
+     ['explaining_hand_up', 'thinking_hand_chin']),
+    (['pergunta', 'dúvida', 'por que', 'como', 'será que'],
+     ['question_mark', 'brain'],
+     ['thinking_hand_chin', 'surprised']),
+]
+
+
+def _validate_scene_coherence(scenes: list[dict], catalog: dict) -> list[dict]:
+    """Valida e corrige coerência visual das cenas pós-LLM.
+
+    1. Corrige props incoerentes com a narração (keyword matching)
+    2. Elimina repetição consecutiva de pose+prop
+    3. Valida timing: narração longa demais para duração curta
+    """
+    allowed_props = set(catalog.get('props') or [])
+    allowed_poses = set(catalog.get('avatar_poses') or [])
+    fixes = []
+
+    for i, sc in enumerate(scenes):
+        texto = (sc.get('texto_narracao') or '').lower()
+        current_props = sc.get('props') or []
+        current_pose = sc.get('avatar_pose') or 'neutral_arms_crossed'
+
+        # --- 1) Keyword → prop matching ---
+        best_rule = None
+        best_score = 0
+        for keywords, rule_props, rule_poses in _SEMANTIC_RULES:
+            score = sum(1 for kw in keywords if kw in texto)
+            if score > best_score:
+                best_score = score
+                best_rule = (rule_props, rule_poses)
+
+        if best_rule and best_score >= 1:
+            suggested_props, suggested_poses = best_rule
+            # Se nenhum prop atual está na lista sugerida, corrigir
+            if not any(p in suggested_props for p in current_props):
+                # Pegar o primeiro prop sugerido que existe no catálogo
+                for sp in suggested_props:
+                    if not allowed_props or sp in allowed_props:
+                        sc['props'] = [sp] + [p for p in current_props if p != sp][:2]
+                        fixes.append(f"Cena {sc.get('id', i+1)}: props corrigidos → {sc['props']}")
+                        break
+
+            # Se a pose não combina, sugerir (só se existe no catálogo)
+            if current_pose not in suggested_poses:
+                for sp in suggested_poses:
+                    if not allowed_poses or sp in allowed_poses:
+                        sc['avatar_pose'] = sp
+                        fixes.append(f"Cena {sc.get('id', i+1)}: pose corrigida → {sp}")
+                        break
+
+        # --- 2) Anti-repetição consecutiva ---
+        if i > 0:
+            prev = scenes[i - 1]
+            same_pose = sc.get('avatar_pose') == prev.get('avatar_pose')
+            same_props = sc.get('props') == prev.get('props')
+            if same_pose and same_props and best_rule:
+                # Rotacionar para próxima pose/prop disponível
+                _, rule_poses = best_rule
+                alt_poses = [p for p in rule_poses if p != sc.get('avatar_pose') and (not allowed_poses or p in allowed_poses)]
+                if alt_poses:
+                    sc['avatar_pose'] = alt_poses[0]
+                    fixes.append(f"Cena {sc.get('id', i+1)}: pose anti-repetição → {alt_poses[0]}")
+
+        # --- 3) Timing: chars vs duração ---
+        texto_len = len(sc.get('texto_narracao') or '')
+        dur = sc.get('duracao_estimada', 5.0)
+        # ~15 chars/segundo é um ritmo rápido mas legível
+        min_dur_needed = texto_len / 15.0
+        if min_dur_needed > dur + 1.0:
+            sc['duracao_estimada'] = round(min(min_dur_needed, 12.0), 1)
+            fixes.append(f"Cena {sc.get('id', i+1)}: duração ajustada {dur}s → {sc['duracao_estimada']}s (texto longo)")
+
+    if fixes:
+        print(f"[CoherenceValidator] {len(fixes)} correções aplicadas:")
+        for f in fixes:
+            print(f"  → {f}")
+    else:
+        print("[CoherenceValidator] ✅ Todas as cenas coerentes")
+
+    return scenes
 
 
 def _build_fallback_scene_plan(brief: str, long_form: bool = True) -> dict:
@@ -954,6 +1064,82 @@ def _ensure_minimum_audio_duration(audio_path: str, min_sec: float = 480.0) -> t
     except Exception as e:
         print(f"  ❌ Erro ao verificar duração do áudio: {e}")
         return (False, 0.0)
+
+
+def validate_audio_quality(audio_path: str, min_duration_sec: float = 30.0) -> tuple[bool, str]:
+    """
+    Task 2: Validador de qualidade de áudio pré-render.
+    
+    Verificações:
+    1. Arquivo existe e tem tamanho mínimo (não está vazio)
+    2. Duração mínima (áudio não pode ser muito curto)
+    3. Detecção de silêncio/chiado (percentual de áudio muito baixo)
+    
+    Retorna:
+        (is_valid, error_message)
+    """
+    # 1. Verificar se arquivo existe
+    if not os.path.exists(audio_path):
+        return (False, "Áudio não encontrado")
+    
+    # 2. Verificar tamanho mínimo do arquivo (mínimo 5KB para áudio real)
+    file_size = os.path.getsize(audio_path)
+    if file_size < 5000:
+        return (False, f"Áudio muito pequeno ({file_size} bytes) - possivelmente vazio")
+    
+    try:
+        # Carregar áudio com moviepy
+        audio_clip = AudioFileClip(audio_path)
+        duration = audio_clip.duration
+        sample_rate = audio_clip.fps
+        
+        # 3. Verificar duração mínima
+        if duration < min_duration_sec:
+            audio_clip.close()
+            return (False, f"Áudio muito curto: {duration:.1f}s < {min_duration_sec}s")
+        
+        # 4. Detecção de silêncio/chiado
+        # Usar pydub para análise de frames se disponível, senãomoviepy
+        try:
+            from pydub import AudioSegment
+            audio_seg = AudioSegment.from_file(audio_path)
+            
+            # Calcular percentagem de frames silenciosos (abaixo de -50dB)
+            silent_frames = sum(1 for frame in audio_seg if frame.dBFS < -50)
+            total_frames = len(audio_seg)
+            silent_percent = (silent_frames / total_frames * 100) if total_frames > 0 else 0
+            
+            if silent_percent > 70:
+                audio_clip.close()
+                return (False, f"Áudio com muito silêncio: {silent_percent:.0f}%")
+            
+            # 5. Detectar volume anormal (muito baixo ou muito alto)
+            max_dBFS = max(frame.dBFS for frame in audio_seg)
+            min_dBFS = min(frame.dBFS for frame in audio_seg)
+            
+            if max_dBFS < -30:
+                audio_clip.close()
+                return (False, f"Áudio com volume muito baixo: {max_dBFS:.1f} dB")
+            
+            if min_dBFS > -10:
+                # Isso pode indicar distorção ou áudio saturado
+                print(f"  ⚠️ Atenção: áudio com volume muito alto ({min_dBFS:.1f} dB)")
+            
+            print(f"  ✅ Áudio validado: {duration:.1f}s, {silent_percent:.1f}% silêncio, {max_dBFS:.1f}dB max")
+            
+        except ImportError:
+            # Sem pydub, fazer validação básica com moviepy
+            print(f"  ⚠️ pydub não disponível, usando validação básica")
+            if duration < 10:
+                audio_clip.close()
+                return (False, f"Áudio muito curto: {duration:.1f}s")
+            print(f"  ✅ Áudio validado (básico): {duration:.1f}s")
+        
+        audio_clip.close()
+        return (True, "")
+        
+    except Exception as e:
+        return (False, f"Erro ao validar áudio: {str(e)}")
 
 
 async def service_generate_audio(scenes: List[Scene], voice_alias: str):
@@ -1969,6 +2155,12 @@ async def generate_video(payload: VideoGenerationRequest):
             timeout=300,
         )
         
+        # Task 2: Validar áudio antes de renderizar
+        print(f"[Run {run_id}] Validando áudio...")
+        audio_valid, audio_error = validate_audio_quality(audio_path, min_duration_sec=30.0)
+        if not audio_valid:
+            raise Exception(f"Áudio inválido: {audio_error}. Pipeline abortado antes de renderizar.")
+        
         # 7. Renderizar Vídeo (retry curto)
         last_render_error = None
         video_url = None
@@ -2016,6 +2208,32 @@ async def generate_video(payload: VideoGenerationRequest):
 @app.get("/health")
 def health_check():
     return {"status": "backend_v1_ready", "ai_engine": "seedream_edge_gemini"}
+
+
+@app.get("/list-videos")
+def list_videos():
+    """Lista vídeos gerados no diretório static."""
+    # STATIC_DIR already points to the correct location
+    static_dir = STATIC_DIR
+    if not os.path.exists(static_dir):
+        return {"videos": [], "message": "Diretório static não encontrado"}
+    
+    videos = []
+    for fname in os.listdir(static_dir):
+        if fname.endswith(".mp4"):
+            fpath = os.path.join(static_dir, fname)
+            stat = os.stat(fpath)
+            videos.append({
+                "filename": fname,
+                "size": stat.st_size,
+                "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                "url": f"/static/{fname}"
+            })
+    
+    # Sort by date, newest first
+    videos.sort(key=lambda v: v["created_at"], reverse=True)
+    return {"videos": videos}
+
 
 if __name__ == "__main__":
     import uvicorn
