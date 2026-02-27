@@ -2171,7 +2171,6 @@ async def generate_video(payload: VideoGenerationRequest):
         is_layers = (payload.mode or "images").lower() == "layers"
         min_bytes_quality = 100_000 if is_layers else 150_000
         min_seconds_quality = 3.0 if (is_layers and len(scenes_to_process) <= 3) else 8.0
-        skip_quality_gate = is_layers and (len(scenes_to_process) <= 3 or "localhost" not in video_url)
         
         for render_attempt in range(2):
             try:
@@ -2180,7 +2179,8 @@ async def generate_video(payload: VideoGenerationRequest):
                     timeout=900,
                 )
                 # Pular quality gate para vídeos curtos ou quando usando backend remoto
-                skip_this = is_layers and (len(scenes_to_process) <= 3 or "localhost" not in video_url)
+                video_url_str = video_url or ""
+                skip_this = is_layers and (len(scenes_to_process) <= 3 or "localhost" not in video_url_str)
                 if skip_this:
                     print(f"[Run {run_id}] Pulando quality gate")
                 else:
