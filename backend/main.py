@@ -2156,8 +2156,8 @@ async def generate_video(payload: VideoGenerationRequest):
         )
         
         # Task 2: Validar áudio antes de renderizar
-        # Para vídeos curtos (≤3 cenas), permitir mínimo de 10s; para longos, 30s
-        min_audio_sec = 10.0 if len(scenes_to_process) <= 3 else 30.0
+        # Para vídeos curtos (≤3 cenas), permitir mínimo de 8s; para longos, 30s
+        min_audio_sec = 8.0 if len(scenes_to_process) <= 3 else 30.0
         print(f"[Run {run_id}] Validando áudio (mínimo: {min_audio_sec}s para {len(scenes_to_process)} cenas)...")
         audio_valid, audio_error = validate_audio_quality(audio_path, min_duration_sec=min_audio_sec)
         if not audio_valid:
