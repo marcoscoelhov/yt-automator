@@ -14,6 +14,7 @@ import time
 import asyncio
 import json
 import base64
+import subprocess
 import requests
 import wave
 import io
@@ -27,6 +28,7 @@ import PIL.Image
 from PIL import Image, ImageDraw
 import hashlib  # Para cache de imagens
 import httpx  # Para chamadas HTTP assíncronas (Kie.ai API)
+import uuid
 
 # Monkey patch para compatibilidade Pillow 10+ com MoviePy antigo
 if not hasattr(PIL.Image, 'ANTIALIAS'):
@@ -62,6 +64,7 @@ def get_config(path: str, default=None):
             return default
     return value
 
+
 print(f"[Config] Carregado: {CONFIG_PATH}")
 print(f"  📷 Imagens: {get_config('services.image_generation.provider', 'seedream')}")
 print(f"  🎙️ TTS: {get_config('services.text_to_speech.provider', 'edge_tts')}")
@@ -71,6 +74,9 @@ print(f"  🎬 Render: {get_config('services.video_rendering.provider', 'moviepy
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+LLM_CALL_TIMEOUT_SECONDS = 120
+LLM_MAX_RETRIES = 2
+AUTO_GENERATE_MAX_SECONDS = 600
 
 # Mantemos Gemini para recursos auxiliares (TTS/Imagem), mas auto-generate agora usa OpenAI.
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -90,8 +96,10 @@ app = FastAPI(title=get_config("app.name", "SaaS VSL Generator MVP - Real AI"))
 # Estrutura de Pastas (usa config ou defaults)
 STATIC_DIR = os.path.join(BASE_DIR, get_config("output.static_dir", "static"))
 TEMP_DIR = os.path.join(BASE_DIR, get_config("output.temp_dir", "temp"))
+RUNS_DIR = os.path.join(BASE_DIR, "runs")
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
+os.makedirs(RUNS_DIR, exist_ok=True)
 
 # Montar pasta static
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -165,7 +173,8 @@ class VideoResponse(BaseModel):
 # --- Auto-generate (Brief -> Nick BR JSON -> Render) ---
 
 class AutoGenerateRequest(BaseModel):
-    brief: str
+    brief: Optional[str] = None
+    tema: Optional[str] = None
     voice_id: Optional[str] = "Antonio"
     mode: Optional[str] = "layers"  # force layers to avoid image-gen API calls
 
@@ -494,51 +503,76 @@ def _llm_generate_scene_plan(brief: str) -> dict:
     is_long_form = ('8-15' in brief or '8–15' in brief)
     max_tokens = 12000 if is_long_form else 4096
 
-    try:
-        resp = requests.post(
-            f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": OPENAI_MODEL,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "Você é um gerador de roteiro JSON estrito. Responda apenas JSON válido sem markdown."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    },
-                ],
-                "temperature": 0.6,
-                "max_completion_tokens": max_tokens,
-                "response_format": {"type": "json_object"},
-            },
-            timeout=180,
-        )
+    max_attempts = LLM_MAX_RETRIES + 1
+    last_error = None
 
-        if resp.status_code >= 400:
-            raise Exception(f"HTTP {resp.status_code}: {resp.text[:400]}")
+    for attempt in range(max_attempts):
+        try:
+            resp = requests.post(
+                f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENAI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": OPENAI_MODEL,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "Você é um gerador de roteiro JSON estrito. Responda apenas JSON válido sem markdown."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        },
+                    ],
+                    "temperature": 0.6,
+                    "max_completion_tokens": max_tokens,
+                    "response_format": {"type": "json_object"},
+                },
+                timeout=LLM_CALL_TIMEOUT_SECONDS,
+            )
 
-        data = resp.json()
-        text = ((data.get('choices') or [{}])[0].get('message') or {}).get('content') or ''
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f'Falha no LLM (OpenAI): {e}')
+            if resp.status_code >= 400:
+                raise Exception(f"HTTP {resp.status_code}: {resp.text[:400]}")
 
-    try:
-        raw = _safe_json_extract(text)
-        plan = _validate_scene_plan(raw)
-    except Exception as e:
-        print(f"[AutoGenerate] fallback acionado: {e}")
-        plan = _build_fallback_scene_plan(brief, long_form=is_long_form)
+            data = resp.json()
+            text = ((data.get('choices') or [{}])[0].get('message') or {}).get('content') or ''
+            raw = _safe_json_extract(text)
+            plan = _validate_scene_plan(raw)
+            break
+        except Exception as e:
+            last_error = e
+            if attempt < max_attempts - 1:
+                backoff_seconds = 2 ** attempt
+                print(f"[AutoGenerate] LLM tentativa {attempt + 1}/{max_attempts} falhou: {e}. Retry em {backoff_seconds}s.")
+                time.sleep(backoff_seconds)
+                continue
+            raise HTTPException(
+                status_code=502,
+                detail=f"Falha no LLM após {max_attempts} tentativas (timeout {LLM_CALL_TIMEOUT_SECONDS}s): {e}"
+            ) from e
 
     if is_long_form:
         plan = _enforce_target_duration(plan, min_sec=480.0, max_sec=900.0)
 
     return plan
+
+
+def _remaining_seconds(deadline: float) -> float:
+    return max(0.0, deadline - time.time())
+
+
+async def _wait_with_deadline(awaitable, operation: str, deadline: float, cap_seconds: float):
+    remaining = _remaining_seconds(deadline)
+    if remaining <= 0:
+        raise TimeoutError(f"Tempo limite global excedido antes de: {operation}")
+
+    timeout = max(0.1, min(cap_seconds, remaining))
+    try:
+        return await asyncio.wait_for(awaitable, timeout=timeout)
+    except asyncio.TimeoutError as e:
+        raise TimeoutError(f"{operation} excedeu {timeout:.1f}s (limite global /auto-generate: {AUTO_GENERATE_MAX_SECONDS}s).") from e
 
 # --- Serviços Reais ---
 
@@ -1674,106 +1708,174 @@ async def get_public_config():
 
 # --- Endpoint Principal ---
 
+def _new_run_id() -> str:
+    return uuid.uuid4().hex[:10]
+
+
+def _persist_run_artifacts(run_id: str, payload: dict, plan: dict, response: dict):
+    run_dir = os.path.join(RUNS_DIR, f"run_{run_id}")
+    os.makedirs(run_dir, exist_ok=True)
+    with open(os.path.join(run_dir, "request.json"), "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(run_dir, "scene_plan.json"), "w", encoding="utf-8") as f:
+        json.dump(plan, f, ensure_ascii=False, indent=2)
+    with open(os.path.join(run_dir, "result.json"), "w", encoding="utf-8") as f:
+        json.dump(response, f, ensure_ascii=False, indent=2)
+    return run_dir
+
+
+def _video_path_from_url(video_url: str) -> str:
+    filename = (video_url or "").split("/static/")[-1].strip()
+    return os.path.join(STATIC_DIR, filename)
+
+
+def _probe_duration_seconds(path: str) -> float:
+    try:
+        proc = subprocess.run(
+            [
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return 0.0
+        return float((proc.stdout or "0").strip() or 0)
+    except Exception:
+        return 0.0
+
+
+def _validate_video_quality(video_url: str, min_seconds: float = 30.0, min_bytes: int = 150_000):
+    video_path = _video_path_from_url(video_url)
+    if not os.path.exists(video_path):
+        raise Exception("Quality gate: arquivo de vídeo não encontrado")
+    size = os.path.getsize(video_path)
+    if size < min_bytes:
+        raise Exception(f"Quality gate: arquivo muito pequeno ({size} bytes)")
+    duration = _probe_duration_seconds(video_path)
+    if duration < min_seconds:
+        raise Exception(f"Quality gate: duração muito curta ({duration:.1f}s < {min_seconds:.1f}s)")
+    return {"video_path": video_path, "bytes": size, "duration": round(duration, 2)}
+
+
+def _send_telegram_alert(text: str):
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat_id:
+        return
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": text[:4096]},
+            timeout=10,
+        )
+    except Exception as e:
+        print(f"[Alert] Telegram falhou: {e}")
 
 
 @app.post('/auto-generate', response_model=AutoGenerateResponse)
 async def auto_generate(payload: AutoGenerateRequest):
     # 1-click flow: brief -> Nick BR plan (JSON) -> render via internal pipeline (layers + Antonio)
+    run_id = _new_run_id()
+    started = time.time()
+    deadline = started + AUTO_GENERATE_MAX_SECONDS
+    print(f"[Run {run_id}] /auto-generate iniciado")
     try:
-        brief = (payload.brief or '').strip()
+        brief = (payload.brief or payload.tema or '').strip()
         if len(brief) < 10:
-            raise HTTPException(status_code=400, detail='brief muito curto. Explique o tema, promessa e público-alvo (>=10 chars).')
+            raise HTTPException(status_code=400, detail='brief/tema muito curto. Explique o tema, promessa e público-alvo (>=10 chars).')
 
         # Force constraints: no image-gen API calls
         mode = 'layers'
         voice_id = payload.voice_id or 'Antonio'
 
-        # FIX 2: Tentar gerar com retry se duração ficar curta
-        max_attempts = 2
-        last_error = None
-        
-        for attempt in range(max_attempts):
-            try:
-                # Se for retry, reforçar o prompt
-                current_brief = brief
-                if attempt > 0:
-                    print(f"\n  🔄 Tentativa {attempt + 1}/{max_attempts}: Reforçando prompt para gerar mais conteúdo...")
-                    current_brief = f"""{brief}
+        plan = await _wait_with_deadline(
+            asyncio.to_thread(_llm_generate_scene_plan, brief),
+            operation="Geração de roteiro LLM",
+            deadline=deadline,
+            cap_seconds=(LLM_CALL_TIMEOUT_SECONDS * (LLM_MAX_RETRIES + 1)) + 10,
+        )
 
-ATENÇÃO: O vídeo anterior ficou muito curto. OBRIGATÓRIO:
-- Cada cena deve ter PELO MENOS 200 caracteres de texto_narracao
-- Gerar NO MÍNIMO 60 cenas para atingir 8-15 minutos de duração
-- Expandir exemplos práticos, casos reais e detalhamento de cada passo
-- Não usar texto genérico: cada cena deve ter conteúdo específico e útil"""
+        scenes_objs = [Scene(**sc) for sc in plan.get('scenes', [])]
+        if not scenes_objs:
+            raise Exception("Plano de cenas vazio após LLM.")
 
-                plan = _llm_generate_scene_plan(current_brief)
-                
-                # Criar request de vídeo
-                scenes_objs = [Scene(**sc) for sc in plan.get('scenes', [])]
-                
-                # Gerar áudio primeiro para validar duração (economiza processamento de vídeo)
-                print("\n[Pre-check] Gerando áudio para validar duração...")
-                test_audio = await service_generate_audio(scenes_objs, voice_id)
-                
-                # FIX 2: Validar duração do áudio
-                is_valid, actual_duration = _ensure_minimum_audio_duration(test_audio, min_sec=480.0)
-                
-                if not is_valid and attempt < max_attempts - 1:
-                    print(f"\n  ⚠️ Duração insuficiente: {actual_duration:.1f}s < 480s. Tentando gerar novamente...")
-                    # Limpar arquivo temporário
-                    if os.path.exists(test_audio):
-                        os.remove(test_audio)
-                    continue  # Retry
-                
-                # Se chegou aqui, ou a duração é válida ou já esgotamos as tentativas
-                # Gerar vídeo completo
-                video_req = VideoGenerationRequest(
-                    script=plan.get('script', ''),
-                    scenes=scenes_objs,
-                    voice_id=voice_id,
-                    narration_style='Normal',
-                    reference_image_b64=None,
-                    mode=mode,
-                )
+        # Pré-check de áudio para erro precoce sem iniciar render pesado.
+        test_audio = await _wait_with_deadline(
+            service_generate_audio(scenes_objs, voice_id),
+            operation="Pré-check de áudio",
+            deadline=deadline,
+            cap_seconds=180,
+        )
+        is_valid, actual_duration = _ensure_minimum_audio_duration(test_audio, min_sec=480.0)
 
-                video_resp = await generate_video(video_req)
-                if video_resp.status != 'completed':
-                    raise Exception(video_resp.message)
+        video_req = VideoGenerationRequest(
+            script=plan.get('script', ''),
+            scenes=scenes_objs,
+            voice_id=voice_id,
+            narration_style='Normal',
+            reference_image_b64=None,
+            mode=mode,
+        )
 
-                # Avisar se ficou curto mas conseguimos gerar
-                message = 'Auto-generate concluído.'
-                if not is_valid:
-                    message = f'Auto-generate concluído com duração de {actual_duration:.1f}s (abaixo do alvo de 8min). Considere adicionar mais conteúdo no brief.'
+        video_resp = await _wait_with_deadline(
+            generate_video(video_req),
+            operation="Renderização de vídeo",
+            deadline=deadline,
+            cap_seconds=520,
+        )
+        if video_resp.status != 'completed':
+            raise Exception(video_resp.message)
 
-                return AutoGenerateResponse(
-                    status='completed',
-                    title=plan['title'],
-                    description=plan['description'],
-                    scene_plan=plan,
-                    video_url=video_resp.video_url,
-                    message=message
-                )
-                
-            except Exception as e:
-                last_error = e
-                if attempt < max_attempts - 1:
-                    print(f"\n  ⚠️ Erro na tentativa {attempt + 1}: {e}")
-                    continue
-                else:
-                    raise
+        message = 'Auto-generate concluído.'
+        if not is_valid:
+            message = f'Auto-generate concluído com duração de {actual_duration:.1f}s (abaixo do alvo de 8min).'
 
-        # Se chegou aqui, todas as tentativas falharam
-        raise last_error or Exception("Falha em todas as tentativas de geração")
+        elapsed = time.time() - started
+        print(f"[Run {run_id}] /auto-generate concluído em {elapsed:.1f}s")
+        response_payload = {
+            "status": "completed",
+            "title": plan['title'],
+            "description": plan['description'],
+            "scene_plan": plan,
+            "video_url": video_resp.video_url,
+            "message": f"{message} | run_id={run_id}",
+        }
+        run_dir = _persist_run_artifacts(
+            run_id,
+            {"brief": payload.brief, "tema": payload.tema, "voice_id": voice_id, "mode": mode},
+            plan,
+            response_payload,
+        )
+        response_payload["message"] += f" | run_dir={run_dir}"
+        _send_telegram_alert(
+            f"✅ yt-automator concluído\nrun_id={run_id}\nvideo={response_payload.get('video_url')}"
+        )
+        return AutoGenerateResponse(**response_payload)
 
     except HTTPException as e:
         raise e
+    except TimeoutError as e:
+        elapsed = time.time() - started
+        print(f"[Run {run_id}] /auto-generate timeout após {elapsed:.1f}s: {e}")
+        _send_telegram_alert(f"❌ yt-automator timeout\nrun_id={run_id}\nerro={str(e)[:800]}")
+        return AutoGenerateResponse(status='error', message=f"run_id={run_id} | timeout | {str(e)}")
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return AutoGenerateResponse(status='error', message=str(e))
+        elapsed = time.time() - started
+        print(f"[Run {run_id}] /auto-generate erro após {elapsed:.1f}s: {e}")
+        _send_telegram_alert(f"❌ yt-automator falhou\nrun_id={run_id}\nerro={str(e)[:800]}")
+        return AutoGenerateResponse(status='error', message=f"run_id={run_id} | {str(e)}")
 
 @app.post("/generate-video", response_model=VideoResponse)
 async def generate_video(payload: VideoGenerationRequest):
+    run_id = _new_run_id()
+    started = time.time()
+    print(f"[Run {run_id}] /generate-video iniciado")
     try:
         # 1. Processar cenas
         scenes_to_process = payload.scenes
@@ -1792,7 +1894,7 @@ async def generate_video(payload: VideoGenerationRequest):
                 status="error",
                 message="Nenhum script ou narração de cenas fornecido."
             )
-        
+
         print(f"--- Iniciando Processamento ({len(script_to_use)} chars, {len(scenes_to_process)} cenas) ---")
         
         # 3. Se não houver cenas, criar uma dummy
@@ -1819,29 +1921,62 @@ async def generate_video(payload: VideoGenerationRequest):
         # 5. Gerar imagens (modo images x modo layers)
         if (payload.mode or "images").lower() == "layers":
             # Render local por assets (avatar + props)
-            image_paths = await service_generate_layer_images(scenes_to_process)
+            image_paths = await asyncio.wait_for(
+                service_generate_layer_images(scenes_to_process),
+                timeout=360,
+            )
         else:
             # Geração por IA (Seedream) - modo legado
-            image_paths = await service_generate_images(scenes_to_process, reference_image_path)
+            image_paths = await asyncio.wait_for(
+                service_generate_images(scenes_to_process, reference_image_path),
+                timeout=600,
+            )
         
         # 6. Gerar Audio com Gemini TTS (áudio natural) com fallback Edge
-        audio_path = await service_generate_audio(scenes_to_process, payload.voice_id)
+        audio_path = await asyncio.wait_for(
+            service_generate_audio(scenes_to_process, payload.voice_id),
+            timeout=300,
+        )
         
-        # 7. Renderizar Vídeo
-        video_url = await service_render_video(image_paths, audio_path, scenes_to_process)
-        
+        # 7. Renderizar Vídeo (retry curto)
+        last_render_error = None
+        video_url = None
+        for render_attempt in range(2):
+            try:
+                video_url = await asyncio.wait_for(
+                    service_render_video(image_paths, audio_path, scenes_to_process),
+                    timeout=900,
+                )
+                quality = _validate_video_quality(video_url, min_seconds=8.0, min_bytes=150_000)
+                print(f"[Run {run_id}] quality_gate ok: {quality}")
+                break
+            except Exception as render_err:
+                last_render_error = render_err
+                print(f"[Run {run_id}] render tentativa {render_attempt + 1} falhou: {render_err}")
+                if render_attempt == 1:
+                    raise
+                await asyncio.sleep(1)
+
+        if not video_url:
+            raise Exception(f"Falha no render após retry: {last_render_error}")
+
+        elapsed = time.time() - started
+        print(f"[Run {run_id}] /generate-video concluído em {elapsed:.1f}s")
+
         return VideoResponse(
             status="completed",
             video_url=video_url,
-            message=f"Vídeo gerado com sucesso! ({len(scenes_to_process)} cenas)"
+            message=f"Vídeo gerado com sucesso! ({len(scenes_to_process)} cenas) | run_id={run_id}"
         )
 
     except Exception as e:
         import traceback
         traceback.print_exc()
+        elapsed = time.time() - started
+        print(f"[Run {run_id}] /generate-video erro após {elapsed:.1f}s: {e}")
         return VideoResponse(
             status="error",
-            message=f"Falha na geração: {str(e)}"
+            message=f"Falha na geração (run_id={run_id}): {str(e)}"
         )
 
 @app.get("/health")
