@@ -1904,6 +1904,28 @@ async def generate_video(payload: VideoGenerationRequest):
                 message="Nenhum script ou narração de cenas fornecido."
             )
 
+        # Se o usuário já enviou um script completo, usar esse texto para narração
+        # mesmo quando as cenas vierem sem texto_narracao/description.
+        if scenes_to_process and script_to_use and script_to_use.strip():
+            scenes_missing_narration = [s for s in scenes_to_process if not (s.get_narration or "").strip()]
+            if scenes_missing_narration:
+                words = script_to_use.strip().split()
+                chunk_size = max(1, len(words) // len(scenes_to_process))
+                chunks = []
+                for idx in range(len(scenes_to_process)):
+                    start = idx * chunk_size
+                    end = len(words) if idx == len(scenes_to_process) - 1 else min(len(words), (idx + 1) * chunk_size)
+                    chunk = " ".join(words[start:end]).strip()
+                    chunks.append(chunk)
+
+                fallback_chunk = chunks[-1] if chunks and chunks[-1] else script_to_use.strip()
+                for idx, scene in enumerate(scenes_to_process):
+                    if not (scene.get_narration or "").strip():
+                        text = (chunks[idx] if idx < len(chunks) else "").strip() or fallback_chunk
+                        scene.texto_narracao = text
+
+                print(f"[Orchestrator] Script do payload distribuído em {len(scenes_to_process)} cenas (sem LLM).")
+
         print(f"--- Iniciando Processamento ({len(script_to_use)} chars, {len(scenes_to_process)} cenas) ---")
         
         # 3. Se não houver cenas, criar uma dummy
@@ -1950,13 +1972,14 @@ async def generate_video(payload: VideoGenerationRequest):
         # 7. Renderizar Vídeo (retry curto)
         last_render_error = None
         video_url = None
+        min_bytes_quality = 100_000 if (payload.mode or "images").lower() == "layers" else 150_000
         for render_attempt in range(2):
             try:
                 video_url = await asyncio.wait_for(
                     service_render_video(image_paths, audio_path, scenes_to_process),
                     timeout=900,
                 )
-                quality = _validate_video_quality(video_url, min_seconds=8.0, min_bytes=150_000)
+                quality = _validate_video_quality(video_url, min_seconds=8.0, min_bytes=min_bytes_quality)
                 print(f"[Run {run_id}] quality_gate ok: {quality}")
                 break
             except Exception as render_err:
