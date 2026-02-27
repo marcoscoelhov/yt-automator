@@ -239,8 +239,9 @@ def _load_layers_asset_catalog() -> dict:
         if os.path.exists(avatar_meta):
             data = json.loads(_read_text_file(avatar_meta))
             catalog['avatar_poses'] = sorted(list((data.get('files') or {}).keys()))
+            print(f"[AutoGenerate] Loaded {len(catalog['avatar_poses'])} avatar poses")
     except Exception as e:
-        print(f"[AutoGenerate] Failed loading avatar catalog: {e}")
+        print(f"[AutoGenerate] Failed loading avatar catalog: {e}, allowed_poses will be empty")
     try:
         props_meta = os.path.join(BASE_DIR, 'assets', 'props', 'whisk_pack_v1_png', '_meta.json')
         if os.path.exists(props_meta):
@@ -248,6 +249,7 @@ def _load_layers_asset_catalog() -> dict:
             catalog['props'] = sorted(list((data.get('files') or {}).keys()))
     except Exception as e:
         print(f"[AutoGenerate] Failed loading props catalog: {e}")
+    print(f"[AutoGenerate] Catalog: {len(catalog.get('avatar_poses', []))} poses, {len(catalog.get('props', []))} props, {len(catalog.get('templates', []))} templates")
     return catalog
 
 
@@ -318,7 +320,7 @@ def _validate_scene_plan(plan: dict) -> dict:
             template = 'avatar_left_prop_right'
 
         pose = (sc.get('avatar_pose') or 'neutral_arms_crossed').strip()
-        if allowed_poses and pose not in allowed_poses:
+        if allowed_poses and pose not in allowed_poses and len(allowed_poses) > 0:
             pose = 'neutral_arms_crossed'
 
         props = sc.get('props') or []
@@ -326,7 +328,7 @@ def _validate_scene_plan(plan: dict) -> dict:
             props = []
         props2 = []
         for p in props[:3]:
-            if isinstance(p, str) and (not allowed_props or p in allowed_props):
+            if isinstance(p, str) and (not allowed_props or (len(allowed_props) > 0 and p in allowed_props)):
                 props2.append(p)
         if template == 'icons_with_red_x' and 'red_x' not in props2:
             props2 = (props2 + ['red_x'])[:3]
