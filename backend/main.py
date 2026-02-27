@@ -1222,10 +1222,10 @@ async def service_generate_audio(scenes: List[Scene], voice_alias: str):
         file_size = os.path.getsize(output_path)
         print(f"  ✅ Áudio Gemini TTS gerado: {target_voice} ({file_size / 1024:.1f} KB)")
         
-        # FIX 2: Validar duração do áudio gerado
-        is_valid, actual_duration = _ensure_minimum_audio_duration(output_path, min_sec=480.0)
-        if not is_valid:
-            print(f"  ⚠️ Áudio muito curto ({actual_duration:.1f}s). Considere adicionar mais conteúdo nas cenas.")
+        # FIX 2: Validar duração do áudio gerado (comentado - agora usa validate_audio_quality)
+        # is_valid, actual_duration = _ensure_minimum_audio_duration(output_path, min_sec=480.0)
+        # if not is_valid:
+        #     print(f"  ⚠️ Áudio muito curto ({actual_duration:.1f}s). Considere adicionar mais conteúdo nas cenas.")
         
         return output_path
         
@@ -1273,10 +1273,10 @@ async def service_generate_audio_edge_fallback(scenes: List[Scene], voice_alias:
     file_size = os.path.getsize(output_path)
     print(f"  ✅ Áudio Edge TTS gerado: {target_voice} ({file_size / 1024:.1f} KB)")
     
-    # FIX 2: Validar duração do áudio gerado
-    is_valid, actual_duration = _ensure_minimum_audio_duration(output_path, min_sec=480.0)
-    if not is_valid:
-        print(f"  ⚠️ Áudio muito curto ({actual_duration:.1f}s). Considere adicionar mais conteúdo nas cenas.")
+    # FIX 2: Validar duração do áudio gerado (comentado - agora usa validate_audio_quality)
+    # is_valid, actual_duration = _ensure_minimum_audio_duration(output_path, min_sec=480.0)
+    # if not is_valid:
+    #     print(f"  ⚠️ Áudio muito curto ({actual_duration:.1f}s). Considere adicionar mais conteúdo nas cenas.")
     
     return output_path
 
