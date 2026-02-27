@@ -2178,9 +2178,11 @@ async def generate_video(payload: VideoGenerationRequest):
                     service_render_video(image_paths, audio_path, scenes_to_process),
                     timeout=900,
                 )
-                # Pular quality gate para vídeos curtos ou quando usando backend remoto
-                video_url_str = video_url or ""
-                skip_this = is_layers and (len(scenes_to_process) <= 3 or "localhost" not in video_url_str)
+                # Pular quality gate quando:
+                # 1. Vídeos curtos (≤3 cenas), OU
+                # 2. Usando backend remoto (não temos acesso local ao arquivo)
+                is_local = video_url and ("localhost" in video_url or "127.0.0.1" in video_url)
+                skip_this = is_layers and (len(scenes_to_process) <= 3 or not is_local)
                 if skip_this:
                     print(f"[Run {run_id}] Pulando quality gate")
                 else:
