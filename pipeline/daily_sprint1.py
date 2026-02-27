@@ -17,7 +17,7 @@ MEDIA_OUTBOUND.mkdir(parents=True, exist_ok=True)
 
 INTEL_FILE = WORKSPACE / 'intel' / 'DAILY-INTEL.md'
 
-BACKEND_URL = 'http://127.0.0.1:8000'
+BACKEND_URL = 'http://69.62.93.146:8000'
 
 
 def _log(msg: str):
