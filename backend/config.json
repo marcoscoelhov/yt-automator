@@ -126,11 +126,11 @@
         "static_dir": "static",
         "temp_dir": "temp",
         "filename_prefix": "vsl_final",
-        "base_url": "http://localhost:8000/static/"
+        "base_url": "http://localhost:8020/static/"
     },
     "server": {
         "host": "0.0.0.0",
-        "port": 8000,
+        "port": 8020,
         "cors_origins": [
             "*"
         ]

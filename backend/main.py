@@ -65,6 +65,15 @@ def get_config(path: str, default=None):
     return value
 
 
+def get_static_base_url() -> str:
+    base_url = str(get_config("output.base_url", "http://localhost:8000/static/") or "").strip()
+    if not base_url:
+        base_url = "http://localhost:8000/static/"
+    if not base_url.endswith("/"):
+        base_url = f"{base_url}/"
+    return base_url
+
+
 print(f"[Config] Carregado: {CONFIG_PATH}")
 print(f"  📷 Imagens: {get_config('services.image_generation.provider', 'seedream')}")
 print(f"  🎙️ TTS: {get_config('services.text_to_speech.provider', 'edge_tts')}")
@@ -1696,7 +1705,7 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
     )
     
     print(f"  ✅ Vídeo renderizado: {output_filename}")
-    return f"http://localhost:8000/static/{output_filename}"
+    return f"{get_static_base_url()}{output_filename}"
 
 @app.get("/config")
 async def get_public_config():
@@ -1985,4 +1994,8 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        app,
+        host=str(get_config("server.host", "0.0.0.0")),
+        port=int(get_config("server.port", 8000)),
+    )
