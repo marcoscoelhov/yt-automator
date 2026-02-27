@@ -2169,19 +2169,20 @@ async def generate_video(payload: VideoGenerationRequest):
         is_layers = (payload.mode or "images").lower() == "layers"
         min_bytes_quality = 100_000 if is_layers else 150_000
         min_seconds_quality = 3.0 if (is_layers and len(scenes_to_process) <= 3) else 8.0
+        skip_quality_gate = is_layers and len(scenes_to_process) <= 3
+        
         for render_attempt in range(2):
             try:
                 video_url = await asyncio.wait_for(
                     service_render_video(image_paths, audio_path, scenes_to_process),
                     timeout=900,
                 )
-        # Para vídeos muito curtos (smoke test, ≤3 cenas), pular quality gate
-        skip_quality_gate = is_layers and len(scenes_to_process) <= 3
-        if skip_quality_gate:
-            print(f"[Run {run_id}] Pulando quality gate para vídeo curto ({len(scenes_to_process)} cenas)")
-        else:
-            quality = _validate_video_quality(video_url, min_seconds=min_seconds_quality, min_bytes=min_bytes_quality)
-            print(f"[Run {run_id}] quality_gate ok: {quality}")
+                # Para vídeos muito curtos (smoke test, ≤3 cenas), pular quality gate
+                if skip_quality_gate:
+                    print(f"[Run {run_id}] Pulando quality gate para vídeo curto ({len(scenes_to_process)} cenas)")
+                else:
+                    quality = _validate_video_quality(video_url, min_seconds=min_seconds_quality, min_bytes=min_bytes_quality)
+                    print(f"[Run {run_id}] quality_gate ok: {quality}")
                 break
             except Exception as render_err:
                 last_render_error = render_err
