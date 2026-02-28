@@ -474,8 +474,8 @@ def _build_fallback_scene_plan(brief: str, long_form: bool = True) -> dict:
     if not theme:
         theme = 'como sair do modo sobrevivência financeira'
 
-    scene_count = 72 if long_form else 18
-    dur = 7.5 if long_form else 5.5
+    scene_count = 120 if long_form else 18
+    dur = 6.0 if long_form else 5.5
 
     beats = [
         'Você sente que trabalha muito e o dinheiro nunca sobra.',
@@ -498,11 +498,7 @@ def _build_fallback_scene_plan(brief: str, long_form: bool = True) -> dict:
     scenes = []
     for i in range(scene_count):
         beat = beats[i % len(beats)]
-        texto_base = f"{beat} Aplicação no tema: {theme}."
-        
-        # FIX 1: Garantir mínimo de 150 caracteres
-        if len(texto_base) < 150:
-            texto_base = f"{texto_base} {CONTEXTUAL_EXPANSIONS[i % len(CONTEXTUAL_EXPANSIONS)]}"
+        texto_base = beat  # Keep text short (1-2 sentences max) for dynamic pacing
         
         scenes.append({
             'id': i + 1,
@@ -608,7 +604,8 @@ def _build_nick_br_prompt_v2(brief: str) -> str:
 - Variar entre os 5 templates disponíveis ao longo do vídeo
 """
 
-    return f"""{meta}\n\n# INPUT BRIEF\n{brief.strip()}\n\n# AVAILABLE LAYERS ASSETS (STRICT)\nTemplates: {catalog['templates']}\nAvatar poses: {catalog['avatar_poses'][:30]}{' ...' if len(catalog['avatar_poses'])>30 else ''}\nProps: {catalog['props'][:60]}{' ...' if len(catalog['props'])>60 else ''}\n\n{visual_matching_rules}\n\n# OUTPUT FORMAT\nReturn ONLY valid JSON with keys: title, description, script, scenes.\n- scenes must be an array of objects with: texto_narracao, duracao_estimada (5-12), template, avatar_pose, props (0-3).\n- Use Portuguese (PT-BR), Nick BR tone: rápido, direto, \"papo reto\", com exemplos, números, e um final com CTA suave.\n- NO markdown, NO comments, NO trailing commas.\n"""
+    return f"""{meta}\n\n# INPUT BRIEF\n{brief.strip()}\n\n# AVAILABLE LAYERS ASSETS (STRICT)\nTemplates: {catalog['templates']}\nAvatar poses: {catalog['avatar_poses'][:30]}{' ...' if len(catalog['avatar_poses'])>30 else ''}\nProps: {catalog['props'][:60]}{' ...' if len(catalog['props'])>60 else ''}\n\n{visual_matching_rules}\n\n# OUTPUT FORMAT\nReturn ONLY valid JSON with keys: title, description, script, scenes.\n- scenes must be an array of objects with: texto_narracao (MAX 2 frases curtas por cena), duracao_estimada (4-6), template, avatar_pose, props (0-3).
+- IMPORTANTE: cada cena deve ter no MÁXIMO 2 frases curtas. Cenas rápidas e dinâmicas. Max 6 segundos por cena.\n- Use Portuguese (PT-BR), Nick BR tone: rápido, direto, \"papo reto\", com exemplos, números, e um final com CTA suave.\n- NO markdown, NO comments, NO trailing commas.\n"""
 
 
 def _llm_generate_scene_plan(brief: str) -> dict:
