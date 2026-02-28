@@ -313,7 +313,7 @@ def _validate_scene_plan(plan: dict) -> dict:
         except Exception:
             dur = 5.0
         if dur < 2.5: dur = 2.5
-        if dur > 9.0: dur = 9.0
+        if dur > 6.0: dur = 6.0
 
         template = (sc.get('template') or 'avatar_left_prop_right').strip()
         if template not in allowed_templates:
@@ -449,7 +449,7 @@ def _validate_scene_coherence(scenes: list[dict], catalog: dict) -> list[dict]:
         # ~15 chars/segundo é um ritmo rápido mas legível
         min_dur_needed = texto_len / 15.0
         if min_dur_needed > dur + 1.0:
-            sc['duracao_estimada'] = round(min(min_dur_needed, 12.0), 1)
+            sc['duracao_estimada'] = round(min(min_dur_needed, 6.0), 1)
             fixes.append(f"Cena {sc.get('id', i+1)}: duração ajustada {dur}s → {sc['duracao_estimada']}s (texto longo)")
 
     if fixes:
@@ -552,7 +552,7 @@ def _enforce_target_duration(plan: dict, min_sec: float = 480.0, max_sec: float 
         factor = min_sec / total
         for i, s in enumerate(scenes):
             d = float(s.get('duracao_estimada') or 5.0)
-            s['duracao_estimada'] = max(6.5, min(12.0, d * factor))
+            s['duracao_estimada'] = max(5.0, min(6.0, d * factor))
             
             # FIX 4: Expansão inteligente baseada no contexto
             txt = (s.get('texto_narracao') or '').strip()
@@ -571,7 +571,7 @@ def _enforce_target_duration(plan: dict, min_sec: float = 480.0, max_sec: float 
         # FIX 4: Usar expansões variadas ao duplicar
         expansion = INTELLIGENT_EXPANSIONS[(i + 3) % len(INTELLIGENT_EXPANSIONS)]
         base['texto_narracao'] = (base.get('texto_narracao') or '').strip() + f" {expansion}"
-        base['duracao_estimada'] = max(5.0, min(12.0, float(base.get('duracao_estimada') or 7.0)))
+        base['duracao_estimada'] = max(4.0, min(6.0, float(base.get('duracao_estimada') or 7.0)))
         scenes.append(base)
         total += float(base['duracao_estimada'])
         i += 1
