@@ -175,6 +175,8 @@ class VideoGenerationRequest(BaseModel):
     narration_style: Optional[str] = "Normal"
     reference_image_b64: Optional[str] = None
     mode: Optional[str] = "images"  # images | layers
+    title: Optional[str] = None
+    brief: Optional[str] = None
 
 class VideoResponse(BaseModel):
     status: str
@@ -2116,13 +2118,14 @@ def _send_telegram_alert(text: str):
         print(f"[Alert] Telegram falhou: {e}")
 
 
-def _notify_mission_control(video_url: str, title: str, brief: str, run_id: str):
+def _notify_mission_control(video_url: str, title: str, brief: str, run_id: str, quality_status: str = "unknown"):
     payload = {
         "event": "video_generated",
         "video_url": video_url,
         "title": title,
         "brief": brief,
         "run_id": run_id,
+        "quality_status": quality_status,
     }
     endpoints = [
         "http://100.99.151.85:3000/api/video-event",
@@ -2195,6 +2198,8 @@ async def auto_generate(payload: AutoGenerateRequest):
             narration_style='Normal',
             reference_image_b64=None,
             mode=mode,
+            title=plan.get('title', ''),
+            brief=brief,
         )
 
         video_resp = await _wait_with_deadline(
@@ -2220,12 +2225,6 @@ async def auto_generate(payload: AutoGenerateRequest):
             "video_url": video_resp.video_url,
             "message": f"{message} | run_id={run_id}",
         }
-        _notify_mission_control(
-            video_url=response_payload["video_url"],
-            title=response_payload["title"],
-            brief=brief,
-            run_id=run_id,
-        )
         run_dir = _persist_run_artifacts(
             run_id,
             {"brief": payload.brief, "tema": payload.tema, "voice_id": voice_id, "mode": mode},
@@ -2363,11 +2362,19 @@ async def generate_video(payload: VideoGenerationRequest):
                     service_render_video(image_paths, audio_path, scenes_to_process),
                     timeout=900,
                 )
-                # Pular quality gate quando:
-                # 1. Vídeos curtos (≤3 cenas), OU
-                # 2. Usando backend remoto (não temos acesso local ao arquivo)
+                # Pular quality gate para vídeos remotos (sem acesso local ao arquivo).
                 is_local = video_url and ("localhost" in video_url or "127.0.0.1" in video_url)
-                skip_this = is_layers and (len(scenes_to_process) <= 3 or not is_local)
+                skip_this = not is_local
+                quality_status = "skipped_remote" if skip_this else "pending"
+
+                # Cria task no Mission Control antes do quality gate.
+                _notify_mission_control(
+                    video_url=video_url,
+                    title=(payload.title or f"Video {run_id}").strip(),
+                    brief=(payload.brief or script_to_use[:500]).strip(),
+                    run_id=run_id,
+                    quality_status=quality_status,
+                )
                 if skip_this:
                     print(f"[Run {run_id}] Pulando quality gate")
                 else:
