@@ -30,6 +30,8 @@ from PIL import Image, ImageDraw
 import hashlib  # Para cache de imagens
 import httpx  # Para chamadas HTTP assíncronas (Kie.ai API)
 import uuid
+import re
+import unicodedata
 
 # Monkey patch para compatibilidade Pillow 10+ com MoviePy antigo
 if not hasattr(PIL.Image, 'ANTIALIAS'):
@@ -354,6 +356,80 @@ def _validate_scene_plan(plan: dict, catalog: dict | None = None) -> dict:
     }
 
 
+def _validate_script_structure(plan: dict) -> tuple[bool, list[str]]:
+    """Valida estrutura do metaprompt no script e retorna (is_valid, errors)."""
+    errors: list[str] = []
+
+    if not isinstance(plan, dict):
+        return False, ["plan must be a dict"]
+
+    script = (plan.get("script") or "").strip()
+    if not script:
+        scenes = plan.get("scenes") or []
+        if isinstance(scenes, list):
+            script = " ".join(
+                (sc.get("texto_narracao") or sc.get("description") or "").strip()
+                for sc in scenes
+                if isinstance(sc, dict)
+            ).strip()
+
+    if not script:
+        return False, ["Script vazio: não foi possível validar estrutura"]
+
+    def _normalize_text(value: str) -> str:
+        value = value.lower()
+        value = "".join(
+            ch for ch in unicodedata.normalize("NFD", value)
+            if unicodedata.category(ch) != "Mn"
+        )
+        return " ".join(value.split())
+
+    required_sections: list[tuple[str, list[str]]] = [
+        ("ABERTURA COM CENA EMOCIONAL", ["você já", "imagina que", "3 da manhã", "olhando para", "desconforto", "dúvida"]),
+        ("QUEBRA DE CRENÇA", ["maioria das pessoas", "mas estão erradas", "ninguem explica"]),
+        ("APRESENTAÇÃO PESSOAL", ["meu nome", "eu passo tempo", "psicologia financeira"]),
+        ("NÚMERO CENTRAL", ["número", "marco", "regra simples", "a oqui está motivo"]),
+        ("ANALOGIA FÍSICA", ["bola de neve", "pedra subindo", "gravidade", "dominó", "metáfora"]),
+        ("PROGRESSÃO MATEMÁTICA", ["primeiro", "segundo", "terceiro", "anos", "acelera"]),
+        ("MUDANÇA PSICOLÓGICA", ["modo sobrevivência", "modo crescimento", "opção", "ansiedade", "confiança"]),
+        ("APLICAÇÃO PRÁTICA", ["carro", "restaurante", "mercado", "emergência", "demissão", "promoção", "casa"]),
+        ("ALERTA", ["aqui é onde", "erram", "estragam", "não faça isso"]),
+        ("FECHAMENTO", ["não é sobre ficar rico", "mudança de trajetória", "decisão hoje", "futuro"]),
+    ]
+
+    normalized_script = _normalize_text(script)
+    cursor = 0
+    for section_name, keywords in required_sections:
+        normalized_keywords = [_normalize_text(k) for k in keywords]
+        matches = [normalized_script.find(k, cursor) for k in normalized_keywords]
+        valid_matches = [pos for pos in matches if pos != -1]
+        if not valid_matches:
+            errors.append(
+                f"Seção ausente ou fora de ordem: {section_name} (keywords esperadas: {', '.join(keywords)})"
+            )
+            continue
+        cursor = min(valid_matches) + 1
+
+    lines = script.splitlines()
+    bullet_line_re = re.compile(r"^\s*[-*]\s+")
+    bullet_lines = [idx + 1 for idx, line in enumerate(lines) if bullet_line_re.match(line)]
+    if bullet_lines:
+        errors.append(f"PROIBIÇÃO: listas com '-' ou '*' detectadas nas linhas {bullet_lines}")
+
+    subtitle_lines = [
+        idx + 1 for idx, line in enumerate(lines)
+        if "##" in line or "###" in line
+    ]
+    if subtitle_lines:
+        errors.append(f"PROIBIÇÃO: subtítulos '##/###' detectados nas linhas {subtitle_lines}")
+
+    extra_bullets = len([line for line in lines if re.match(r"^\s*[-*•]\s+", line)])
+    if extra_bullets > 2:
+        errors.append(f"PROIBIÇÃO: bullet points em excesso ({extra_bullets} encontrados)")
+
+    return (len(errors) == 0, errors)
+
+
 # ---------------------------------------------------------------------------
 # Validador de coerência visual (sem LLM, keyword-based)
 # ---------------------------------------------------------------------------
@@ -657,6 +733,9 @@ def _llm_generate_scene_plan(brief: str) -> dict:
             raw = _safe_json_extract(text)
             catalog = _load_layers_asset_catalog()
             plan = _validate_scene_plan(raw, catalog)
+            is_valid_script, script_errors = _validate_script_structure(plan)
+            if not is_valid_script:
+                raise Exception(f"Estrutura do roteiro inválida: {script_errors}")
             plan['scenes'] = _validate_scene_coherence(plan.get('scenes') or [], catalog)
             break
         except Exception as e:
@@ -2063,9 +2142,9 @@ async def auto_generate(payload: AutoGenerateRequest):
         )
         is_valid, actual_duration = _ensure_minimum_audio_duration(test_audio, min_sec=480.0)
 
-        # Reescalar cenas baseado na duração real do áudio: roteiro/6 = cenas
+        # Reescalar cenas baseado na duração real do áudio: roteiro/5 = cenas
         if is_valid and actual_duration > 60:
-            scenes_objs = _resplit_scenes_by_audio_duration(scenes_objs, actual_duration, target_sec_per_scene=6.0)
+            scenes_objs = _resplit_scenes_by_audio_duration(scenes_objs, actual_duration, target_sec_per_scene=5.0)
             # Atualizar o script no plan com a concatenação das novas cenas
             plan['scenes'] = [s.model_dump() for s in scenes_objs]
             plan['script'] = " ".join(s.get_narration or "" for s in scenes_objs)
