@@ -253,7 +253,7 @@ def _load_layers_asset_catalog() -> dict:
     return catalog
 
 
-def _validate_scene_plan(plan: dict) -> dict:
+def _validate_scene_plan(plan: dict, catalog: dict | None = None) -> dict:
     if not isinstance(plan, dict):
         raise Exception('scene_plan must be an object')
 
@@ -271,7 +271,8 @@ def _validate_scene_plan(plan: dict) -> dict:
     if not isinstance(scenes, list) or len(scenes) < 4:
         raise Exception('Missing/invalid scenes array')
 
-    catalog = _load_layers_asset_catalog()
+    if catalog is None:
+        catalog = _load_layers_asset_catalog()
     allowed_templates = set(catalog['templates'])
     allowed_poses = set(catalog['avatar_poses'])
     allowed_props = set(catalog['props'])
@@ -344,9 +345,6 @@ def _validate_scene_plan(plan: dict) -> dict:
             'props': props2,
             'motion': (sc.get('motion') or None),
         })
-
-    # FIX 4: Validador de coerência visual pós-LLM
-    normalized_scenes = _validate_scene_coherence(normalized_scenes, catalog)
 
     return {
         'title': title.strip(),
@@ -657,7 +655,9 @@ def _llm_generate_scene_plan(brief: str) -> dict:
             data = resp.json()
             text = ((data.get('choices') or [{}])[0].get('message') or {}).get('content') or ''
             raw = _safe_json_extract(text)
-            plan = _validate_scene_plan(raw)
+            catalog = _load_layers_asset_catalog()
+            plan = _validate_scene_plan(raw, catalog)
+            plan['scenes'] = _validate_scene_coherence(plan.get('scenes') or [], catalog)
             break
         except Exception as e:
             last_error = e
