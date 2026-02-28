@@ -386,29 +386,39 @@ def _validate_script_structure(plan: dict) -> tuple[bool, list[str]]:
 
     required_sections: list[tuple[str, list[str]]] = [
         ("ABERTURA COM CENA EMOCIONAL", ["você já", "imagina que", "3 da manhã", "olhando para", "desconforto", "dúvida"]),
-        ("QUEBRA DE CRENÇA", ["maioria das pessoas", "mas estão erradas", "ninguem explica"]),
-        ("APRESENTAÇÃO PESSOAL", ["meu nome", "eu passo tempo", "psicologia financeira"]),
-        ("NÚMERO CENTRAL", ["número", "marco", "regra simples", "a oqui está motivo"]),
-        ("ANALOGIA FÍSICA", ["bola de neve", "pedra subindo", "gravidade", "dominó", "metáfora"]),
-        ("PROGRESSÃO MATEMÁTICA", ["primeiro", "segundo", "terceiro", "anos", "acelera"]),
-        ("MUDANÇA PSICOLÓGICA", ["modo sobrevivência", "modo crescimento", "opção", "ansiedade", "confiança"]),
-        ("APLICAÇÃO PRÁTICA", ["carro", "restaurante", "mercado", "emergência", "demissão", "promoção", "casa"]),
-        ("ALERTA", ["aqui é onde", "erram", "estragam", "não faça isso"]),
-        ("FECHAMENTO", ["não é sobre ficar rico", "mudança de trajetória", "decisão hoje", "futuro"]),
+        ("QUEBRA DE CRENÇA", ["maioria das pessoas", "a maioria", "muita gente", "todo mundo", "mas estão erradas", "ninguem explica"]),
+        ("APRESENTAÇÃO PESSOAL", ["meu nome", "me chamo", "sou o", "sou a", "eu passo tempo", "psicologia financeira"]),
+        ("NÚMERO CENTRAL", ["número", "numero", "valor", "regra", "marco", "regra simples", "a oqui está motivo"]),
+        ("ANALOGIA FÍSICA", ["bola de neve", "bola", "neve", "acumulando", "pedra subindo", "gravidade", "dominó", "metáfora"]),
+        ("PROGRESSÃO MATEMÁTICA", ["primeiro", "primeira", "início", "começo", "segundo", "terceiro", "anos", "acelera"]),
+        ("MUDANÇA PSICOLÓGICA", ["modo sobrevivência", "sobrevivencia", "sobreviver", "falta", "modo crescimento", "opção", "ansiedade", "confiança"]),
+        ("APLICAÇÃO PRÁTICA", ["carro", "veículo", "automóvel", "transporte", "restaurante", "mercado", "emergência", "demissão", "promoção", "casa"]),
+        ("ALERTA", ["aqui é onde", "aqui que", "é aqui", "momento", "erram", "estragam", "não faça isso"]),
+        ("FECHAMENTO", ["não é sobre ficar rico", "não é riqueza", "riqueza rápida", "ficar rico", "mudança de trajetória", "decisão hoje", "futuro"]),
     ]
 
     normalized_script = _normalize_text(script)
     cursor = 0
+    matched_sections = 0
+    missing_sections: list[str] = []
     for section_name, keywords in required_sections:
         normalized_keywords = [_normalize_text(k) for k in keywords]
         matches = [normalized_script.find(k, cursor) for k in normalized_keywords]
         valid_matches = [pos for pos in matches if pos != -1]
         if not valid_matches:
-            errors.append(
-                f"Seção ausente ou fora de ordem: {section_name} (keywords esperadas: {', '.join(keywords)})"
+            missing_sections.append(
+                f"{section_name} (keywords esperadas: {', '.join(keywords)})"
             )
             continue
+        matched_sections += 1
         cursor = min(valid_matches) + 1
+
+    min_sections_required = 5
+    if matched_sections < min_sections_required:
+        errors.append(
+            f"Estrutura insuficiente: {matched_sections}/{len(required_sections)} seções detectadas "
+            f"(mínimo: {min_sections_required}). Ausentes ou fora de ordem: {'; '.join(missing_sections)}"
+        )
 
     lines = script.splitlines()
     bullet_line_re = re.compile(r"^\s*[-*]\s+")
