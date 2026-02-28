@@ -2118,9 +2118,18 @@ def _send_telegram_alert(text: str):
         print(f"[Alert] Telegram falhou: {e}")
 
 
-def _notify_mission_control(video_url: str, title: str, brief: str, run_id: str, quality_status: str = "unknown"):
+def _notify_mission_control(
+    title: str,
+    brief: str,
+    run_id: str,
+    event: str = "video_generated",
+    status: str = "completed",
+    video_url: str = "",
+    quality_status: str = "unknown",
+):
     payload = {
-        "event": "video_generated",
+        "event": event,
+        "status": status,
         "video_url": video_url,
         "title": title,
         "brief": brief,
@@ -2298,6 +2307,17 @@ async def generate_video(payload: VideoGenerationRequest):
 
                 print(f"[Orchestrator] Script do payload distribuído em {len(scenes_to_process)} cenas (sem LLM).")
 
+        # Cria/atualiza task no Mission Control quando a geração começa.
+        _notify_mission_control(
+            title=(payload.title or f"Video {run_id}").strip(),
+            brief=(payload.brief or script_to_use[:500]).strip(),
+            run_id=run_id,
+            event="video_started",
+            status="in_progress",
+            video_url="",
+            quality_status="pending",
+        )
+
         print(f"--- Iniciando Processamento ({len(script_to_use)} chars, {len(scenes_to_process)} cenas) ---")
         
         # 3. Se não houver cenas, criar uma dummy
@@ -2366,15 +2386,6 @@ async def generate_video(payload: VideoGenerationRequest):
                 is_local = video_url and ("localhost" in video_url or "127.0.0.1" in video_url)
                 skip_this = not is_local
                 quality_status = "skipped_remote" if skip_this else "pending"
-
-                # Cria task no Mission Control antes do quality gate.
-                _notify_mission_control(
-                    video_url=video_url,
-                    title=(payload.title or f"Video {run_id}").strip(),
-                    brief=(payload.brief or script_to_use[:500]).strip(),
-                    run_id=run_id,
-                    quality_status=quality_status,
-                )
                 if skip_this:
                     print(f"[Run {run_id}] Pulando quality gate")
                 else:
@@ -2390,6 +2401,16 @@ async def generate_video(payload: VideoGenerationRequest):
 
         if not video_url:
             raise Exception(f"Falha no render após retry: {last_render_error}")
+
+        _notify_mission_control(
+            title=(payload.title or f"Video {run_id}").strip(),
+            brief=(payload.brief or script_to_use[:500]).strip(),
+            run_id=run_id,
+            event="video_ready",
+            status="review",
+            video_url=video_url,
+            quality_status=quality_status,
+        )
 
         elapsed = time.time() - started
         print(f"[Run {run_id}] /generate-video concluído em {elapsed:.1f}s")
