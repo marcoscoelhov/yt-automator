@@ -86,7 +86,7 @@ OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 LLM_CALL_TIMEOUT_SECONDS = 120
 LLM_MAX_RETRIES = 2
-AUTO_GENERATE_MAX_SECONDS = 600
+AUTO_GENERATE_MAX_SECONDS = 900
 
 # Mantemos Gemini para recursos auxiliares (TTS/Imagem), mas auto-generate agora usa OpenAI.
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
