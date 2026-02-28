@@ -1065,6 +1065,63 @@ def _ensure_minimum_audio_duration(audio_path: str, min_sec: float = 480.0) -> t
         return (False, 0.0)
 
 
+def _resplit_scenes_by_audio_duration(scenes: List[Scene], audio_duration: float, target_sec_per_scene: float = 6.0) -> List[Scene]:
+    """
+    Reescala as cenas baseadas na duração real do áudio.
+    
+    Lógica: roteiro/6 = número de cenas
+    - Pega o script completo de todas as cenas
+    - Divide igualmente pelo número de cenas calculado
+    """
+    # Concatenar todo o script
+    full_script = ""
+    for sc in scenes:
+        narr = sc.get_narration or ""
+        if narr:
+            full_script += " " + narr
+    full_script = full_script.strip()
+    
+    if not full_script:
+        return scenes
+    
+    # Calcular número de cenas = áudio / 6 segundos
+    num_scenes = max(1, int(round(audio_duration / target_sec_per_scene)))
+    
+    # Não exceder 200 cenas (limite razoável)
+    num_scenes = min(num_scenes, 200)
+    
+    print(f"  → Reescalando {len(scenes)} cenas → {num_scenes} cenas ({audio_duration:.1f}s / {target_sec_per_scene}s por cena)")
+    
+    # Dividir o script em partes iguais
+    words = full_script.split()
+    chunk_size = max(1, len(words) // num_scenes)
+    
+    catalog = _load_layers_asset_catalog()
+    templates = catalog.get('templates') or ['avatar_left_prop_right']
+    poses = catalog.get('avatar_poses') or ['neutral_arms_crossed']
+    props_list = catalog.get('props') or []
+    
+    new_scenes = []
+    for i in range(num_scenes):
+        start = i * chunk_size
+        end = len(words) if i == num_scenes - 1 else min(len(words), (i + 1) * chunk_size)
+        chunk = " ".join(words[start:end])
+        
+        new_scenes.append(Scene(
+            id=i + 1,
+            texto_narracao=chunk,
+            prompt_visual=None,
+            duracao_estimada=target_sec_per_scene,
+            tipo_transicao='cut',
+            template=templates[i % len(templates)],
+            avatar_pose=poses[i % len(poses)],
+            props=[props_list[i % len(props_list)]] if props_list else [],
+            motion=None,
+        ))
+    
+    return new_scenes
+
+
 def validate_audio_quality(audio_path: str, min_duration_sec: float = 30.0) -> tuple[bool, str]:
     """
     Task 2: Validador de qualidade de áudio pré-render.
@@ -2005,6 +2062,13 @@ async def auto_generate(payload: AutoGenerateRequest):
             cap_seconds=180,
         )
         is_valid, actual_duration = _ensure_minimum_audio_duration(test_audio, min_sec=480.0)
+
+        # Reescalar cenas baseado na duração real do áudio: roteiro/6 = cenas
+        if is_valid and actual_duration > 60:
+            scenes_objs = _resplit_scenes_by_audio_duration(scenes_objs, actual_duration, target_sec_per_scene=6.0)
+            # Atualizar o script no plan com a concatenação das novas cenas
+            plan['scenes'] = [s.model_dump() for s in scenes_objs]
+            plan['script'] = " ".join(s.get_narration or "" for s in scenes_objs)
 
         video_req = VideoGenerationRequest(
             script=plan.get('script', ''),
