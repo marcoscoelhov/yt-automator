@@ -1,0 +1,185 @@
+{
+  "title": "Como Organizar Suas Finanças de Forma Eficiente",
+  "description": "Descubra como mudar sua relação com o dinheiro e alcançar a liberdade financeira.",
+  "script": "Neste vídeo, vamos explorar como você pode organizar suas finanças de maneira simples e eficaz. Chegou a hora de mudar sua mentalidade e adotar hábitos que realmente funcionam.",
+  "scenes": [
+    {
+      "id": 1,
+      "texto_narracao": "Você já se sentiu perdido com suas finanças? Aquele mês em que tudo parece sair do controle? Isso é algo que poucos percebem, mas muda o resultado final.",
+      "prompt_visual": null,
+      "duracao_estimada": 10.2,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "smiling",
+      "props": [
+        "chart_up"
+      ],
+      "motion": null
+    },
+    {
+      "id": 2,
+      "texto_narracao": "Não é apenas o que você ganha que muda o jogo. É como você organiza isso. Se você prestar atenção nisso, vai evitar o erro mais comum. Quando você entende esse ponto, o próximo passo fica natural.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "worried",
+      "props": [
+        "warning_sign"
+      ],
+      "motion": null
+    },
+    {
+      "id": 3,
+      "texto_narracao": "Se você não tem um orçamento, sua vida financeira pode ser um desastre. O número mágico? 50-30-20. Quando você entende esse ponto, o próximo passo fica natural.",
+      "prompt_visual": null,
+      "duracao_estimada": 10.7,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "explaining_hand_up",
+      "props": [],
+      "motion": null
+    },
+    {
+      "id": 4,
+      "texto_narracao": "Essa regra diz que 50% do seu salário deve ir para necessidades, 30% para desejos e 20% para poupança. Aqui está o segredo que ninguém conta: consistência vence intensidade.",
+      "prompt_visual": null,
+      "duracao_estimada": 11.5,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "explaining_hand_up",
+      "props": [
+        "moneybag"
+      ],
+      "motion": null
+    },
+    {
+      "id": 5,
+      "texto_narracao": "Quando você vive no modo sobrevivência, cada centavo parece escasso. Mas no modo crescimento, você vê oportunidades. Observe como isso se conecta com sua rotina financeira atual.",
+      "prompt_visual": null,
+      "duracao_estimada": 11.9,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "relieved_exhale",
+      "props": [
+        "chart_up"
+      ],
+      "motion": null
+    },
+    {
+      "id": 6,
+      "texto_narracao": "Essa mudança de mentalidade impacta suas decisões financeiras. Você começa a ver o dinheiro como uma ferramenta. Esse princípio funciona porque mexe com decisões, não só com dinheiro.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "explaining_hand_up",
+      "props": [
+        "moneybag"
+      ],
+      "motion": null
+    },
+    {
+      "id": 7,
+      "texto_narracao": "Vamos a um exemplo: se você ganha R$ 3.000, isso significa R$ 1.500 para necessidades, R$ 900 para desejos e R$ 600 para poupança. Aplique isso por 30 dias e compare com o mês anterior.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "explaining_hand_up",
+      "props": [
+        "piggy_bank"
+      ],
+      "motion": null
+    },
+    {
+      "id": 8,
+      "texto_narracao": "Agora, se você poupar R$ 600 todo mês, em um ano você terá R$ 7.200. E isso é só o começo. É simples, mas exige disciplina diária. E funciona. Quando você domina isso, ganha liberdade de escolha.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "thinking_hand_chin",
+      "props": [
+        "piggy_bank"
+      ],
+      "motion": null
+    },
+    {
+      "id": 9,
+      "texto_narracao": "Não se trata apenas de dinheiro. É sobre mudar seu comportamento, ser consistente e ter autocontrole. Quando você domina isso, ganha liberdade de escolha.",
+      "prompt_visual": null,
+      "duracao_estimada": 10.3,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "explaining_hand_up",
+      "props": [
+        "moneybag"
+      ],
+      "motion": null
+    },
+    {
+      "id": 10,
+      "texto_narracao": "Quando você organiza suas finanças, ganha poder de escolha. Negociações melhores e mais oportunidades. Esse detalhe faz toda diferença quando você aplica na prática.",
+      "prompt_visual": null,
+      "duracao_estimada": 11.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "neutral_arms_crossed",
+      "props": [
+        "briefcase"
+      ],
+      "motion": null
+    },
+    {
+      "id": 11,
+      "texto_narracao": "Um erro comum? Comemorar cedo. Não deixe que uma pequena vitória te faça perder o foco. Isso é algo que poucos percebem, mas muda o resultado final. Se você prestar atenção nisso, vai evitar o erro mais comum.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "shaking_no",
+      "props": [
+        "red_x"
+      ],
+      "motion": null
+    },
+    {
+      "id": 12,
+      "texto_narracao": "Aqui estão 3 passos práticos: 1) Crie seu orçamento. 2) Acompanhe seus gastos. 3) Revise mensalmente. Se você prestar atenção nisso, vai evitar o erro mais comum.",
+      "prompt_visual": null,
+      "duracao_estimada": 10.8,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "worried",
+      "props": [
+        "warning_sign"
+      ],
+      "motion": null
+    },
+    {
+      "id": 13,
+      "texto_narracao": "Lembre-se: mudanças levam tempo. Mas cada passo conta. Comece hoje! Quando você entende esse ponto, o próximo passo fica natural. Aqui está o segredo que ninguém conta: consistência vence intensidade.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "smiling",
+      "props": [],
+      "motion": null
+    },
+    {
+      "id": 14,
+      "texto_narracao": "Gostou do conteúdo? Comente, curta e se inscreva para mais dicas! Aqui está o segredo que ninguém conta: consistência vence intensidade. Observe como isso se conecta com sua rotina financeira atual.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "thinking_hand_chin",
+      "props": [
+        "question_mark"
+      ],
+      "motion": null
+    }
+  ]
+}

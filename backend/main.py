@@ -585,7 +585,7 @@ def _enforce_target_duration(plan: dict, min_sec: float = 480.0, max_sec: float 
 
 
 def _build_nick_br_prompt_v2(brief: str) -> str:
-    prompt_path = os.path.join(BASE_DIR, 'prompts', 'nickinvests-br-meta-prompt.md')
+    prompt_path = os.path.join(BASE_DIR, 'prompts', 'metaprompt_nick.md')
     meta = _read_text_file(prompt_path) if os.path.exists(prompt_path) else ''
     catalog = _load_layers_asset_catalog()
 

@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Video, FileText, Loader2, AlertCircle, CheckCircle2, Clock, Zap, Mic2, Image as ImageIcon, Upload, User, X, ChevronDown, Star, History, Trash2 } from 'lucide-react';
 
+const API_BASE = 'http://69.62.93.146:8000';
+
 interface Scene {
   id: number;
   texto_narracao?: string;
@@ -77,7 +79,7 @@ export default function App() {
 
   // Carregar configurações do backend
   useEffect(() => {
-    fetch('http://localhost:8000/config')
+    fetch('/config')
       .then(res => res.json())
       .then(data => setPricingConfig(data.pricing))
       .catch(err => console.error("Falha ao carregar config:", err));
@@ -165,7 +167,7 @@ export default function App() {
 
       setStatus('Gerando roteiro + render (1-click)...');
 
-      const response = await fetch('http://localhost:8000/auto-generate', {
+      const response = await fetch('/auto-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brief, voice_id: 'Antonio', mode: 'layers' })
@@ -246,7 +248,7 @@ const handleGenerate = async () => {
         payload.reference_image_b64 = base64;
       }
 
-      const response = await fetch('http://localhost:8000/generate-video', {
+      const response = await fetch('/generate-video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

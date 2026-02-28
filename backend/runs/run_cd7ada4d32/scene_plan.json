@@ -1,0 +1,176 @@
+{
+  "title": "Como Sair das Dívidas do Cartão de Crédito",
+  "description": "Descubra como se livrar das dívidas do cartão de crédito de forma prática e eficaz.",
+  "script": "Neste vídeo, vamos mostrar como você pode sair das dívidas do cartão de crédito e transformar sua vida financeira. Vamos abordar a dor cotidiana que muitos enfrentam, quebrar algumas crenças comuns e apresentar um plano prático para você. Prepare-se para mudar sua mentalidade e sua situação financeira.",
+  "scenes": [
+    {
+      "id": 1,
+      "texto_narracao": "Você já se sentiu preso pelas dívidas do cartão de crédito? Isso é algo que poucos percebem, mas muda o resultado final. Se você prestar atenção nisso, vai evitar o erro mais comum.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "worried",
+      "props": [
+        "warning_sign"
+      ],
+      "motion": null
+    },
+    {
+      "id": 2,
+      "texto_narracao": "A verdade é que não é o quanto você ganha que muda o jogo. É a sua gestão financeira! Se você prestar atenção nisso, vai evitar o erro mais comum. Quando você entende esse ponto, o próximo passo fica natural.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "frustrated",
+      "props": [
+        "warning_sign"
+      ],
+      "motion": null
+    },
+    {
+      "id": 3,
+      "texto_narracao": "Vamos falar de um número: 30%. Esse é o limite ideal de uso do seu cartão. Quando você entende esse ponto, o próximo passo fica natural. Aqui está o segredo que ninguém conta: consistência vence intensidade.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "explaining_hand_up",
+      "props": [],
+      "motion": null
+    },
+    {
+      "id": 4,
+      "texto_narracao": "Quando você gasta mais de 30%, entra no modo sobrevivência. E isso afeta suas decisões. Aqui está o segredo que ninguém conta: consistência vence intensidade.",
+      "prompt_visual": null,
+      "duracao_estimada": 10.5,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "frustrated",
+      "props": [
+        "warning_sign"
+      ],
+      "motion": null
+    },
+    {
+      "id": 5,
+      "texto_narracao": "Vamos ver um exemplo: se você tem um limite de R$ 1.000, o ideal é usar no máximo R$ 300. Observe como isso se conecta com sua rotina financeira atual.",
+      "prompt_visual": null,
+      "duracao_estimada": 10.1,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "thinking_hand_chin",
+      "props": [
+        "question_mark"
+      ],
+      "motion": null
+    },
+    {
+      "id": 6,
+      "texto_narracao": "Agora, se você gastar R$ 600, a dívida vai aumentar e o tempo para sair dela só cresce. Esse princípio funciona porque mexe com decisões, não só com dinheiro.",
+      "prompt_visual": null,
+      "duracao_estimada": 10.5,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "explaining_hand_up",
+      "props": [
+        "moneybag",
+        "chart_down"
+      ],
+      "motion": null
+    },
+    {
+      "id": 7,
+      "texto_narracao": "Mudar sua identidade financeira é essencial. Não é só sobre dinheiro, é sobre comportamento. Aplique isso por 30 dias e compare com o mês anterior. É simples, mas exige disciplina diária. E funciona.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "explaining_hand_up",
+      "props": [
+        "moneybag"
+      ],
+      "motion": null
+    },
+    {
+      "id": 8,
+      "texto_narracao": "Quando você controla suas finanças, ganha poder de escolha e melhora sua carreira. É simples, mas exige disciplina diária. E funciona. Quando você domina isso, ganha liberdade de escolha.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "neutral_arms_crossed",
+      "props": [
+        "briefcase"
+      ],
+      "motion": null
+    },
+    {
+      "id": 9,
+      "texto_narracao": "Um erro clássico? Comemorar cedo. Isso pode destruir sua estratégia. Quando você domina isso, ganha liberdade de escolha. Esse detalhe faz toda diferença quando você aplica na prática.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "shaking_no",
+      "props": [
+        "red_x"
+      ],
+      "motion": null
+    },
+    {
+      "id": 10,
+      "texto_narracao": "Vamos ao plano: 1. Defina seu limite. 2. Controle seus gastos. 3. Pague mais do que o mínimo. Esse detalhe faz toda diferença quando você aplica na prática.",
+      "prompt_visual": null,
+      "duracao_estimada": 10.4,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "surprised",
+      "props": [
+        "car"
+      ],
+      "motion": null
+    },
+    {
+      "id": 11,
+      "texto_narracao": "Se você seguir esses passos, vai ver a diferença na sua vida financeira. Isso é algo que poucos percebem, mas muda o resultado final. Se você prestar atenção nisso, vai evitar o erro mais comum.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "worried",
+      "props": [
+        "warning_sign",
+        "green_check"
+      ],
+      "motion": null
+    },
+    {
+      "id": 12,
+      "texto_narracao": "Lembre-se, não é apenas sobre sair das dívidas, mas sobre construir um futuro financeiro saudável. Se você prestar atenção nisso, vai evitar o erro mais comum.",
+      "prompt_visual": null,
+      "duracao_estimada": 10.6,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "worried",
+      "props": [
+        "warning_sign"
+      ],
+      "motion": null
+    },
+    {
+      "id": 13,
+      "texto_narracao": "Gostou das dicas? Curta, comente e inscreva-se para mais conteúdos como este! Quando você entende esse ponto, o próximo passo fica natural. Aqui está o segredo que ninguém conta: consistência vence intensidade.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "thinking_hand_chin",
+      "props": [
+        "question_mark"
+      ],
+      "motion": null
+    }
+  ]
+}

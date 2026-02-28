@@ -1,0 +1,285 @@
+{
+  "status": "completed",
+  "title": "3 Erros Financeiros que Secam Seu Dinheiro Antes do Fim do Mês",
+  "description": "Descubra os erros que podem estar drenando suas finanças e como evitá-los para ter mais controle sobre seu dinheiro.",
+  "scene_plan": {
+    "title": "3 Erros Financeiros que Secam Seu Dinheiro Antes do Fim do Mês",
+    "description": "Descubra os erros que podem estar drenando suas finanças e como evitá-los para ter mais controle sobre seu dinheiro.",
+    "script": "Neste vídeo, vamos falar sobre três erros financeiros que você pode estar cometendo e que estão secando seu dinheiro antes do fim do mês. Vamos entender como pequenas decisões podem ter um grande impacto nas suas finanças. Fique comigo até o final e descubra como mudar isso!",
+    "scenes": [
+      {
+        "id": 1,
+        "texto_narracao": "Você já chegou ao fim do mês e percebeu que seu dinheiro desapareceu? Isso é mais comum do que você imagina. Isso é algo que poucos percebem, mas muda o resultado final.",
+        "prompt_visual": null,
+        "duracao_estimada": 8.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_center",
+        "avatar_pose": "worried",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 2,
+        "texto_narracao": "Não é só o salário baixo que causa isso. É a maneira como gastamos. Se você prestar atenção nisso, vai evitar o erro mais comum. Quando você entende esse ponto, o próximo passo fica natural.",
+        "prompt_visual": null,
+        "duracao_estimada": 6.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_left_prop_right",
+        "avatar_pose": "shaking_no",
+        "props": [
+          "red_x"
+        ],
+        "motion": null
+      },
+      {
+        "id": 3,
+        "texto_narracao": "Você sabia que 70% das pessoas têm dificuldades financeiras por causa de hábitos de consumo? Quando você entende esse ponto, o próximo passo fica natural.",
+        "prompt_visual": null,
+        "duracao_estimada": 7.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_right_prop_left",
+        "avatar_pose": "explaining_hand_up",
+        "props": [
+          "moneybag"
+        ],
+        "motion": null
+      },
+      {
+        "id": 4,
+        "texto_narracao": "Vamos falar sobre três erros que podem estar drenando suas finanças. Aqui está o segredo que ninguém conta: consistência vence intensidade. Observe como isso se conecta com sua rotina financeira atual.",
+        "prompt_visual": null,
+        "duracao_estimada": 5.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_center",
+        "avatar_pose": "neutral_arms_crossed",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 5,
+        "texto_narracao": "Erro número um: não controlar seus gastos diários. Isso pode parecer simples, mas é crucial. Observe como isso se conecta com sua rotina financeira atual.",
+        "prompt_visual": null,
+        "duracao_estimada": 9.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_left_prop_right",
+        "avatar_pose": "frustrated",
+        "props": [
+          "receipt"
+        ],
+        "motion": null
+      },
+      {
+        "id": 6,
+        "texto_narracao": "Muitas vezes, gastamos sem pensar. E isso se acumula rapidamente. Esse princípio funciona porque mexe com decisões, não só com dinheiro. Aplique isso por 30 dias e compare com o mês anterior.",
+        "prompt_visual": null,
+        "duracao_estimada": 8.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_right_prop_left",
+        "avatar_pose": "thinking_hand_chin",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 7,
+        "texto_narracao": "Erro número dois: não ter um orçamento. Você precisa saber para onde seu dinheiro está indo. Aplique isso por 30 dias e compare com o mês anterior. É simples, mas exige disciplina diária. E funciona.",
+        "prompt_visual": null,
+        "duracao_estimada": 8.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_center",
+        "avatar_pose": "pointing",
+        "props": [
+          "chart_down"
+        ],
+        "motion": null
+      },
+      {
+        "id": 8,
+        "texto_narracao": "Sem um orçamento, fica fácil se perder nas despesas. É simples, mas exige disciplina diária. E funciona. Quando você domina isso, ganha liberdade de escolha.",
+        "prompt_visual": null,
+        "duracao_estimada": 6.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_left_prop_right",
+        "avatar_pose": "worried",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 9,
+        "texto_narracao": "Erro número três: não poupar. Se você não reserva um pouco todo mês, fica difícil ter segurança financeira. Quando você domina isso, ganha liberdade de escolha.",
+        "prompt_visual": null,
+        "duracao_estimada": 9.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_right_prop_left",
+        "avatar_pose": "smiling",
+        "props": [
+          "savings_jar"
+        ],
+        "motion": null
+      },
+      {
+        "id": 10,
+        "texto_narracao": "Esses erros podem parecer pequenos, mas eles têm um grande impacto. Esse detalhe faz toda diferença quando você aplica na prática. Isso é algo que poucos percebem, mas muda o resultado final.",
+        "prompt_visual": null,
+        "duracao_estimada": 7.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_center",
+        "avatar_pose": "relieved_exhale",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 11,
+        "texto_narracao": "Quando você entra no 'modo sobrevivência', suas decisões financeiras mudam. Você gasta no impulso. Isso é algo que poucos percebem, mas muda o resultado final.",
+        "prompt_visual": null,
+        "duracao_estimada": 9.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_left_prop_right",
+        "avatar_pose": "frustrated",
+        "props": [
+          "warning_sign"
+        ],
+        "motion": null
+      },
+      {
+        "id": 12,
+        "texto_narracao": "Mas se você mudar para o 'modo crescimento', suas escolhas serão mais conscientes. Se você prestar atenção nisso, vai evitar o erro mais comum. Quando você entende esse ponto, o próximo passo fica natural.",
+        "prompt_visual": null,
+        "duracao_estimada": 9.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_right_prop_left",
+        "avatar_pose": "thinking_hand_chin",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 13,
+        "texto_narracao": "Vamos ver um exemplo: se você gastar R$ 100 a mais por mês, em um ano isso é R$ 1.200. Quando você entende esse ponto, o próximo passo fica natural. Aqui está o segredo que ninguém conta: consistência vence intensidade.",
+        "prompt_visual": null,
+        "duracao_estimada": 8.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_center",
+        "avatar_pose": "explaining_hand_up",
+        "props": [
+          "coin_stack"
+        ],
+        "motion": null
+      },
+      {
+        "id": 14,
+        "texto_narracao": "Agora, se você poupar R$ 100 por mês, em um ano terá R$ 1.200. Veja a diferença? Aqui está o segredo que ninguém conta: consistência vence intensidade.",
+        "prompt_visual": null,
+        "duracao_estimada": 8.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_left_prop_right",
+        "avatar_pose": "smiling",
+        "props": [
+          "chart_up"
+        ],
+        "motion": null
+      },
+      {
+        "id": 15,
+        "texto_narracao": "Mudança de identidade: não é só sobre dinheiro. É sobre como você se comporta financeiramente. Observe como isso se conecta com sua rotina financeira atual.",
+        "prompt_visual": null,
+        "duracao_estimada": 9.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_right_prop_left",
+        "avatar_pose": "neutral_arms_crossed",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 16,
+        "texto_narracao": "Se você se vê como alguém que economiza, suas decisões mudam. Esse princípio funciona porque mexe com decisões, não só com dinheiro. Aplique isso por 30 dias e compare com o mês anterior.",
+        "prompt_visual": null,
+        "duracao_estimada": 7.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_center",
+        "avatar_pose": "pointing",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 17,
+        "texto_narracao": "Lembre-se, o dinheiro é uma ferramenta. Use-a a seu favor. Aplique isso por 30 dias e compare com o mês anterior. É simples, mas exige disciplina diária. E funciona.",
+        "prompt_visual": null,
+        "duracao_estimada": 8.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_left_prop_right",
+        "avatar_pose": "smiling",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 18,
+        "texto_narracao": "Um erro clássico: comemorar cedo. Você precisa manter a base sólida. É simples, mas exige disciplina diária. E funciona. Quando você domina isso, ganha liberdade de escolha.",
+        "prompt_visual": null,
+        "duracao_estimada": 9.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_right_prop_left",
+        "avatar_pose": "shaking_no",
+        "props": [
+          "red_x"
+        ],
+        "motion": null
+      },
+      {
+        "id": 19,
+        "texto_narracao": "Não desanime! Vamos para um plano prático. Quando você domina isso, ganha liberdade de escolha. Esse detalhe faz toda diferença quando você aplica na prática.",
+        "prompt_visual": null,
+        "duracao_estimada": 7.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_center",
+        "avatar_pose": "relieved_exhale",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 20,
+        "texto_narracao": "1. Controle seus gastos. 2. Crie um orçamento. 3. Reserve um valor para poupança todo mês. Esse detalhe faz toda diferença quando você aplica na prática.",
+        "prompt_visual": null,
+        "duracao_estimada": 9.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_left_prop_right",
+        "avatar_pose": "explaining_hand_up",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 21,
+        "texto_narracao": "Esses passos simples podem fazer uma grande diferença. Isso é algo que poucos percebem, mas muda o resultado final. Se você prestar atenção nisso, vai evitar o erro mais comum.",
+        "prompt_visual": null,
+        "duracao_estimada": 8.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_center",
+        "avatar_pose": "smiling",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 22,
+        "texto_narracao": "Lembre-se, a mudança começa com você. Comente aqui se você já cometeu algum desses erros. Se você prestar atenção nisso, vai evitar o erro mais comum.",
+        "prompt_visual": null,
+        "duracao_estimada": 9.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_right_prop_left",
+        "avatar_pose": "pointing",
+        "props": [],
+        "motion": null
+      },
+      {
+        "id": 23,
+        "texto_narracao": "E não esqueça de curtir e se inscrever para mais dicas financeiras. Quando você entende esse ponto, o próximo passo fica natural. Aqui está o segredo que ninguém conta: consistência vence intensidade.",
+        "prompt_visual": null,
+        "duracao_estimada": 8.0,
+        "tipo_transicao": "cut",
+        "template": "avatar_center",
+        "avatar_pose": "smiling",
+        "props": [],
+        "motion": null
+      }
+    ]
+  },
+  "video_url": "http://localhost:8020/static/vsl_final_1772188564.mp4",
+  "message": "Auto-generate concluído com duração de 360.7s (abaixo do alvo de 8min). | run_id=7b59468900"
+}

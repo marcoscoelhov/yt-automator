@@ -1,0 +1,164 @@
+{
+  "title": "Transformando sua Relação com o Dinheiro",
+  "description": "Descubra como mudar sua mentalidade financeira e conquistar sua liberdade econômica.",
+  "script": "Neste vídeo, vamos explorar como pequenas mudanças na sua mentalidade podem transformar sua relação com o dinheiro. Prepare-se para entender como sair da zona de conforto e avançar rumo ao crescimento financeiro.",
+  "scenes": [
+    {
+      "id": 1,
+      "texto_narracao": "Você sabia que 80% das pessoas vivem no vermelho? Isso é um problema real. Isso é algo que poucos percebem, mas muda o resultado final. Se você prestar atenção nisso, vai evitar o erro mais comum.",
+      "prompt_visual": null,
+      "duracao_estimada": 6.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "worried",
+      "props": [
+        "warning_sign"
+      ],
+      "motion": null
+    },
+    {
+      "id": 2,
+      "texto_narracao": "Mas não é a falta de dinheiro que muda o jogo. É a mentalidade. Se você prestar atenção nisso, vai evitar o erro mais comum. Quando você entende esse ponto, o próximo passo fica natural.",
+      "prompt_visual": null,
+      "duracao_estimada": 5.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "neutral_arms_crossed",
+      "props": [],
+      "motion": null
+    },
+    {
+      "id": 3,
+      "texto_narracao": "A regra dos 10% pode ser a chave. Sempre guarde 10% do que você ganha. Quando você entende esse ponto, o próximo passo fica natural. Aqui está o segredo que ninguém conta: consistência vence intensidade.",
+      "prompt_visual": null,
+      "duracao_estimada": 7.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "explaining_hand_up",
+      "props": [
+        "coin_stack"
+      ],
+      "motion": null
+    },
+    {
+      "id": 4,
+      "texto_narracao": "Quando você opera no modo sobrevivência, suas decisões são limitadas. Aqui está o segredo que ninguém conta: consistência vence intensidade. Observe como isso se conecta com sua rotina financeira atual.",
+      "prompt_visual": null,
+      "duracao_estimada": 8.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "frustrated",
+      "props": [],
+      "motion": null
+    },
+    {
+      "id": 5,
+      "texto_narracao": "Mas no modo crescimento, você enxerga oportunidades onde outros veem problemas. Observe como isso se conecta com sua rotina financeira atual. Esse princípio funciona porque mexe com decisões, não só com dinheiro.",
+      "prompt_visual": null,
+      "duracao_estimada": 6.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "smiling",
+      "props": [
+        "chart_up"
+      ],
+      "motion": null
+    },
+    {
+      "id": 6,
+      "texto_narracao": "Imagina que você ganha R$1000. Guardar 10% significa R$100. Isso é só o começo. Esse princípio funciona porque mexe com decisões, não só com dinheiro.",
+      "prompt_visual": null,
+      "duracao_estimada": 9.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "thinking_hand_chin",
+      "props": [],
+      "motion": null
+    },
+    {
+      "id": 7,
+      "texto_narracao": "Se você guardar R$100 todo mês, em um ano, terá R$1200. E isso pode crescer. Aplique isso por 30 dias e compare com o mês anterior. É simples, mas exige disciplina diária. E funciona.",
+      "prompt_visual": null,
+      "duracao_estimada": 8.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "explaining_hand_up",
+      "props": [
+        "savings_jar"
+      ],
+      "motion": null
+    },
+    {
+      "id": 8,
+      "texto_narracao": "Mudança de identidade é crucial. Não é só sobre dinheiro, mas sobre quem você se torna. É simples, mas exige disciplina diária. E funciona. Quando você domina isso, ganha liberdade de escolha.",
+      "prompt_visual": null,
+      "duracao_estimada": 7.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "relieved_exhale",
+      "props": [],
+      "motion": null
+    },
+    {
+      "id": 9,
+      "texto_narracao": "Isso impacta sua carreira. Você pode negociar melhor e ter mais opções. Quando você domina isso, ganha liberdade de escolha. Esse detalhe faz toda diferença quando você aplica na prática.",
+      "prompt_visual": null,
+      "duracao_estimada": 8.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "neutral_arms_crossed",
+      "props": [
+        "briefcase"
+      ],
+      "motion": null
+    },
+    {
+      "id": 10,
+      "texto_narracao": "Mas cuidado! Comemorar cedo pode arruinar tudo. Mantenha o foco. Esse detalhe faz toda diferença quando você aplica na prática. Isso é algo que poucos percebem, mas muda o resultado final.",
+      "prompt_visual": null,
+      "duracao_estimada": 6.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "shaking_no",
+      "props": [
+        "red_x"
+      ],
+      "motion": null
+    },
+    {
+      "id": 11,
+      "texto_narracao": "Comece a guardar 10% hoje. É simples e pode mudar seu futuro. Isso é algo que poucos percebem, mas muda o resultado final. Se você prestar atenção nisso, vai evitar o erro mais comum.",
+      "prompt_visual": null,
+      "duracao_estimada": 7.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "pointing",
+      "props": [
+        "green_check"
+      ],
+      "motion": null
+    },
+    {
+      "id": 12,
+      "texto_narracao": "E aí, pronto para mudar sua relação com o dinheiro? Comente abaixo! Se você prestar atenção nisso, vai evitar o erro mais comum. Quando você entende esse ponto, o próximo passo fica natural.",
+      "prompt_visual": null,
+      "duracao_estimada": 6.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "smiling",
+      "props": [],
+      "motion": null
+    },
+    {
+      "id": 13,
+      "texto_narracao": "Não esqueça de curtir e se inscrever para mais dicas como essa. Quando você entende esse ponto, o próximo passo fica natural. Aqui está o segredo que ninguém conta: consistência vence intensidade.",
+      "prompt_visual": null,
+      "duracao_estimada": 5.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "smiling",
+      "props": [],
+      "motion": null
+    }
+  ]
+}

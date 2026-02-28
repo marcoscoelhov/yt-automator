@@ -1,0 +1,150 @@
+{
+  "title": "Como Sair das Dívidas do Cartão de Crédito Passo a Passo",
+  "description": "Descubra como sair das dívidas do cartão de crédito com passos práticos e efetivos. Chega de sufoco financeiro!",
+  "script": "Neste vídeo, vamos abordar uma situação que muitos enfrentam: as dívidas do cartão de crédito. Você sabia que não é apenas o que você ganha que importa, mas como você gerencia suas finanças? Vamos explorar um número chave que pode mudar sua abordagem e, claro, dar dicas práticas para você sair do vermelho.",
+  "scenes": [
+    {
+      "id": 1,
+      "texto_narracao": "Você já se sentiu preso pelas dívidas do cartão de crédito? Aquela sensação de sufoco vem todos os meses? Isso é algo que poucos percebem, mas muda o resultado final.",
+      "prompt_visual": null,
+      "duracao_estimada": 11.1,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "worried",
+      "props": [
+        "warning_sign"
+      ],
+      "motion": null
+    },
+    {
+      "id": 2,
+      "texto_narracao": "A verdade é que não é o valor que você ganha que muda o jogo. É como você lida com suas despesas. Se você prestar atenção nisso, vai evitar o erro mais comum.",
+      "prompt_visual": null,
+      "duracao_estimada": 10.5,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "pointing",
+      "props": [
+        "moneybag"
+      ],
+      "motion": null
+    },
+    {
+      "id": 3,
+      "texto_narracao": "Vamos falar de um número: 30%. Esse é o limite de uso do seu cartão que você deve respeitar. Quando você entende esse ponto, o próximo passo fica natural.",
+      "prompt_visual": null,
+      "duracao_estimada": 10.3,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "explaining_hand_up",
+      "props": [
+        "moneybag"
+      ],
+      "motion": null
+    },
+    {
+      "id": 4,
+      "texto_narracao": "Quando você entra no modo sobrevivência, a única coisa que você vê é a dívida. No modo crescimento, você busca soluções. Aqui está o segredo que ninguém conta: consistência vence intensidade.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "worried",
+      "props": [
+        "warning_sign"
+      ],
+      "motion": null
+    },
+    {
+      "id": 5,
+      "texto_narracao": "Imagine que você tem R$1.000 de dívida. Se você pagar R$100 por mês, levará 10 meses. Mas se dobrar para R$200, serão apenas 5 meses. Observe como isso se conecta com sua rotina financeira atual.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "worried",
+      "props": [
+        "warning_sign",
+        "coin_stack"
+      ],
+      "motion": null
+    },
+    {
+      "id": 6,
+      "texto_narracao": "Não é só sobre dinheiro. É sobre mudar seu comportamento e ser consistente. Esse princípio funciona porque mexe com decisões, não só com dinheiro. Aplique isso por 30 dias e compare com o mês anterior.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "explaining_hand_up",
+      "props": [
+        "moneybag"
+      ],
+      "motion": null
+    },
+    {
+      "id": 7,
+      "texto_narracao": "Ao controlar suas dívidas, você ganha poder de escolha e pode negociar melhores condições. Aplique isso por 30 dias e compare com o mês anterior. É simples, mas exige disciplina diária. E funciona.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_left_prop_right",
+      "avatar_pose": "worried",
+      "props": [
+        "warning_sign",
+        "briefcase"
+      ],
+      "motion": null
+    },
+    {
+      "id": 8,
+      "texto_narracao": "Cuidado! Celebrar a redução da dívida antes de quitá-la pode te fazer cair na armadilha novamente. É simples, mas exige disciplina diária. E funciona.",
+      "prompt_visual": null,
+      "duracao_estimada": 9.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "shaking_no",
+      "props": [
+        "red_x"
+      ],
+      "motion": null
+    },
+    {
+      "id": 9,
+      "texto_narracao": "Então, como sair dessas dívidas? Primeiro, faça um orçamento. Segundo, corte gastos desnecessários. E por último, pague mais do que o mínimo. Quando você domina isso, ganha liberdade de escolha.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_right_prop_left",
+      "avatar_pose": "worried",
+      "props": [
+        "warning_sign"
+      ],
+      "motion": null
+    },
+    {
+      "id": 10,
+      "texto_narracao": "Lembre-se: a jornada para a liberdade financeira começa com um passo. Comece hoje mesmo! Esse detalhe faz toda diferença quando você aplica na prática.",
+      "prompt_visual": null,
+      "duracao_estimada": 10.1,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "smiling",
+      "props": [],
+      "motion": null
+    },
+    {
+      "id": 11,
+      "texto_narracao": "Se você gostou desse vídeo, curta e se inscreva. Vamos juntos sair das dívidas! Isso é algo que poucos percebem, mas muda o resultado final. Se você prestar atenção nisso, vai evitar o erro mais comum.",
+      "prompt_visual": null,
+      "duracao_estimada": 12.0,
+      "tipo_transicao": "cut",
+      "template": "avatar_center",
+      "avatar_pose": "worried",
+      "props": [
+        "warning_sign"
+      ],
+      "motion": null
+    }
+  ]
+}
