@@ -2059,7 +2059,7 @@ async def auto_generate(payload: AutoGenerateRequest):
             service_generate_audio(scenes_objs, voice_id),
             operation="Pré-check de áudio",
             deadline=deadline,
-            cap_seconds=180,
+            cap_seconds=300,
         )
         is_valid, actual_duration = _ensure_minimum_audio_duration(test_audio, min_sec=480.0)
 
