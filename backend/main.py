@@ -2116,6 +2116,35 @@ def _send_telegram_alert(text: str):
         print(f"[Alert] Telegram falhou: {e}")
 
 
+def _notify_mission_control(video_url: str, title: str, brief: str, run_id: str):
+    payload = {
+        "event": "video_generated",
+        "video_url": video_url,
+        "title": title,
+        "brief": brief,
+        "run_id": run_id,
+    }
+    endpoints = [
+        "http://100.99.151.85:3000/api/video-event",
+        "http://localhost:3000/api/video-event",
+    ]
+    last_error = None
+    for idx, endpoint in enumerate(endpoints):
+        try:
+            resp = requests.post(endpoint, json=payload, timeout=5)
+            if resp.status_code < 400:
+                return
+            last_error = f"HTTP {resp.status_code}: {resp.text[:300]}"
+            print(f"[Run {run_id}] Mission Control notify failed via {endpoint}: {last_error}")
+        except Exception as e:
+            last_error = str(e)
+            print(f"[Run {run_id}] Mission Control notify exception via {endpoint}: {e}")
+        if idx == 0:
+            print(f"[Run {run_id}] Tentando fallback Mission Control em localhost...")
+    if last_error:
+        print(f"[Run {run_id}] Mission Control notify failed after fallback: {last_error}")
+
+
 @app.post('/auto-generate', response_model=AutoGenerateResponse)
 async def auto_generate(payload: AutoGenerateRequest):
     # 1-click flow: brief -> Nick BR plan (JSON) -> render via internal pipeline (layers + Antonio)
@@ -2191,6 +2220,12 @@ async def auto_generate(payload: AutoGenerateRequest):
             "video_url": video_resp.video_url,
             "message": f"{message} | run_id={run_id}",
         }
+        _notify_mission_control(
+            video_url=response_payload["video_url"],
+            title=response_payload["title"],
+            brief=brief,
+            run_id=run_id,
+        )
         run_dir = _persist_run_artifacts(
             run_id,
             {"brief": payload.brief, "tema": payload.tema, "voice_id": voice_id, "mode": mode},
