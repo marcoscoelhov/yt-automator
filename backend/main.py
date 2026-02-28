@@ -1088,7 +1088,7 @@ def _resplit_scenes_by_audio_duration(scenes: List[Scene], audio_duration: float
     num_scenes = max(1, int(round(audio_duration / target_sec_per_scene)))
     
     # Não exceder 200 cenas (limite razoável)
-    num_scenes = min(num_scenes, 200)
+    num_scenes = min(num_scenes, 150)
     
     print(f"  → Reescalando {len(scenes)} cenas → {num_scenes} cenas ({audio_duration:.1f}s / {target_sec_per_scene}s por cena)")
     
