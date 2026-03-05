@@ -1,12 +1,5 @@
 # 📌 METAPROMPT — ESTILO NICK (REPLICAÇÃO ESTRITA)
 
-> **⚠️ IMPORTANTE: O conteúdo deve ser 100% contextualizado para o BRASIL.**
-> - Referências à Receita Federal (não IRS)
-> - Prazos brasileiros (ex: 30/04 para entrega de IRPF)
-> - Valores em R$ (não USD)
-> - Legislação e contexto brasileiro
-> - Exemplos do cotidiano brasileiro
->
 > Crie uma narração longa em português brasileiro replicando estritamente o estilo do Nick (roteiros financeiros psicológicos com matemática progressiva).
 >
 > NÃO OTIMIZE.
