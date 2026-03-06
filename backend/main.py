@@ -23,10 +23,12 @@ from google import genai
 from google.genai import types
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, CompositeVideoClip, TextClip, ImageClip
 from moviepy.video.fx import resize, loop
+import textwrap
+import random
 import edge_tts
 from dotenv import load_dotenv
 import PIL.Image
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 import hashlib  # Para cache de imagens
 import httpx  # Para chamadas HTTP assíncronas (Kie.ai API)
 import uuid
@@ -1947,6 +1949,78 @@ async def service_generate_layer_images(scenes: List[Scene]):
     return out_paths
 
 
+def _clean_caption_text(text: str) -> str:
+    text = (text or "").strip()
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _caption_for_scene(scene: Scene, max_chars: int = 54) -> str:
+    """CapCut-ish: 1 linha, curta, pegando o melhor pedaço da fala da cena."""
+    raw = _clean_caption_text(scene.get_narration if scene else "")
+    if not raw:
+        return ""
+    # prioriza 1ª frase
+    first = re.split(r"(?<=[\.!\?])\s+", raw, maxsplit=1)[0]
+    first = first.strip()
+    if len(first) > max_chars:
+        first = first[: max_chars - 1].rstrip() + "…"
+    return first
+
+
+def _render_caption_png(text: str, out_path: str, size=(1280, 720)) -> str:
+    """Renderiza uma legenda 1-linha em PNG (sem ImageMagick)."""
+    W, H = size
+    text = _clean_caption_text(text)
+    if not text:
+        # cria PNG transparente vazio
+        Image.new("RGBA", (W, H), (0, 0, 0, 0)).save(out_path, format="PNG")
+        return out_path
+
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    # Fonte padrão do sistema (Ubuntu)
+    font = None
+    for fp in [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    ]:
+        try:
+            if os.path.exists(fp):
+                font = ImageFont.truetype(fp, 54)
+                break
+        except Exception:
+            continue
+    if font is None:
+        font = ImageFont.load_default()
+
+    # garante 1 linha (sem wrap). se estourar, corta.
+    max_chars = 54
+    if len(text) > max_chars:
+        text = text[: max_chars - 1].rstrip() + "…"
+
+    # posição: centro inferior com padding
+    bbox = draw.textbbox((0, 0), text, font=font, stroke_width=6)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    x = int((W - tw) / 2)
+    y = int(H * 0.82)
+
+    # stroke (preto) + fill (branco)
+    draw.text(
+        (x, y),
+        text,
+        font=font,
+        fill=(255, 255, 255, 255),
+        stroke_width=8,
+        stroke_fill=(0, 0, 0, 220),
+    )
+
+    img.save(out_path, format="PNG", optimize=True)
+    return out_path
+
+
 async def service_render_video(image_paths: List[str], audio_path: str, scenes: List[Scene]):
     """
     Compõe imagens e áudio usando MoviePy com suporte a:
@@ -1999,18 +2073,39 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
         clip = clip.set_position("center")
         
         # Aplicar efeito de zoom baseado no tipo de transição
+        transition = None
         if scene:
             transition = scene.get_transition
-            if transition in ["zoom_in", "zoom_out"]:
-                clip = apply_zoom_effect(clip, transition, scene_duration)
+
+        # Dinamismo padrão (se vier tudo "cut"):
+        if transition in [None, "", "cut"]:
+            # alterna zooms pra dar vida sem depender do prompt
+            transition = "zoom_in" if (i % 4 in (0, 1)) else "zoom_out"
+
+        if transition in ["zoom_in", "zoom_out"]:
+            clip = apply_zoom_effect(clip, transition, scene_duration)
+            if scene:
                 print(f"  🎬 Cena {scene.id}: {transition} ({scene_duration:.1f}s)")
-            elif transition == "crossfade":
-                # Crossfade será aplicado na concatenação
-                clip = clip.crossfadein(0.5) if i > 0 else clip
+        elif transition == "crossfade":
+            # Crossfade será aplicado na concatenação
+            clip = clip.crossfadein(0.5) if i > 0 else clip
+            if scene:
                 print(f"  🎬 Cena {scene.id}: crossfade ({scene_duration:.1f}s)")
-            else:
+        else:
+            if scene:
                 print(f"  🎬 Cena {scene.id}: cut ({scene_duration:.1f}s)")
-        
+
+        # Legenda 1 linha (CapCut-ish)
+        try:
+            caption = _caption_for_scene(scene) if scene else ""
+            if caption:
+                cap_path = os.path.join(TEMP_DIR, f"caption_{int(time.time()*1000)}_{i}.png")
+                _render_caption_png(caption, cap_path, size=(1280, 720))
+                cap_clip = ImageClip(cap_path).set_duration(scene_duration).set_position((0, 0))
+                clip = CompositeVideoClip([clip, cap_clip])
+        except Exception as e:
+            print(f"  ⚠️ Legenda falhou na cena {i+1}: {e}")
+
         clips.append(clip)
         current_time += scene_duration
     
