@@ -70,6 +70,27 @@ def get_config(path: str, default=None):
     return value
 
 
+def _round_to_nearest_even(value: float) -> int:
+    """Arredonda para o inteiro par mais próximo (mínimo 2)."""
+    n = int(round(float(value)))
+    if n < 2:
+        n = 2
+    if n % 2 == 0:
+        return n
+    lower = n - 1
+    upper = n + 1
+    return lower if abs(float(value) - lower) <= abs(upper - float(value)) else upper
+
+
+def _normalize_video_dimensions(width: float, height: float) -> tuple[int, int]:
+    return _round_to_nearest_even(width), _round_to_nearest_even(height)
+
+
+# Target fixo para YouTube Full HD (com garantia de dimensões pares para libx264)
+TARGET_VIDEO_WIDTH, TARGET_VIDEO_HEIGHT = _normalize_video_dimensions(1920, 1080)
+TARGET_VIDEO_SIZE = (TARGET_VIDEO_WIDTH, TARGET_VIDEO_HEIGHT)
+
+
 def get_static_base_url() -> str:
     base_url = str(get_config("output.base_url", "http://localhost:8000/static/") or "").strip()
     if not base_url:
@@ -1560,6 +1581,7 @@ def apply_zoom_effect(clip, zoom_type: str, duration: float):
 
 def resize_to_fill(clip, target_width, target_height):
     """Redimensiona o clip para preencher a tela (crop) mantendo aspect ratio"""
+    target_width, target_height = _normalize_video_dimensions(target_width, target_height)
     w, h = clip.size
     ratio_clip = w / h
     ratio_target = target_width / target_height
@@ -1884,13 +1906,13 @@ def _paste_center(dst: Image.Image, src: Image.Image, center_xy: tuple[int, int]
     dst.alpha_composite(src, (x, y))
 
 
-def _render_layer_scene_to_png(scene: Scene, out_path: str, size=(1280, 720)) -> str:
+def _render_layer_scene_to_png(scene: Scene, out_path: str, size=TARGET_VIDEO_SIZE) -> str:
     """Renderiza 1 cena (layers) em um PNG (fundo branco) usando avatar + props.
 
     MVP: fit-to-box (evita recorte/pixelização), z-order por template,
     icons_with_red_x com red_x como overlay, e validação mínima.
     """
-    W, H = size
+    W, H = _normalize_video_dimensions(size[0], size[1])
     canvas = Image.new("RGBA", (W, H), (255, 255, 255, 255))
 
     template = (scene.template or "avatar_center").strip().lower()
@@ -2079,9 +2101,9 @@ def _caption_for_scene(scene: Scene, max_chars: int = 54) -> str:
     return first
 
 
-def _render_caption_png(text: str, out_path: str, size=(1280, 720)) -> str:
+def _render_caption_png(text: str, out_path: str, size=TARGET_VIDEO_SIZE) -> str:
     """Renderiza uma legenda 1-linha em PNG (sem ImageMagick)."""
-    W, H = size
+    W, H = _normalize_video_dimensions(size[0], size[1])
     text = _clean_caption_text(text)
     if not text:
         # cria PNG transparente vazio
@@ -2139,6 +2161,7 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
     - Duração sincronizada por cena
     """
     print("[Orchestrator] Renderizando vídeo com MoviePy...")
+    target_width, target_height = TARGET_VIDEO_SIZE
     
     if not audio_path or not os.path.exists(audio_path):
         raise Exception("Arquivo de áudio não encontrado.")
@@ -2176,10 +2199,10 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
         # FIX: Usar resize_to_fill em vez de apenas resize height
         # Isso garante que imagens quadradas/retangulares preencham 16:9 sem barras pretas
         try:
-            clip = resize_to_fill(clip, 1280, 720)
+            clip = resize_to_fill(clip, target_width, target_height)
         except Exception as e:
             print(f"Erro no resize_to_fill: {e}, usando resize padrão")
-            clip = clip.resize(height=720)
+            clip = clip.resize(height=target_height)
             
         clip = clip.set_position("center")
         
@@ -2209,25 +2232,33 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
         # Legenda 1 linha (CapCut-ish)
         try:
             caption = _caption_for_scene(scene) if scene else ""
+            composed_layers = [clip]
             if caption:
                 cap_path = os.path.join(TEMP_DIR, f"caption_{int(time.time()*1000)}_{i}.png")
-                _render_caption_png(caption, cap_path, size=(1280, 720))
+                _render_caption_png(caption, cap_path, size=TARGET_VIDEO_SIZE)
                 cap_clip = ImageClip(cap_path).set_duration(scene_duration).set_position((0, 0))
-                clip = CompositeVideoClip([clip, cap_clip])
+                composed_layers.append(cap_clip)
+            clip = CompositeVideoClip(composed_layers, size=TARGET_VIDEO_SIZE).set_duration(scene_duration)
         except Exception as e:
             print(f"  ⚠️ Legenda falhou na cena {i+1}: {e}")
+            clip = CompositeVideoClip([clip], size=TARGET_VIDEO_SIZE).set_duration(scene_duration)
 
         clips.append(clip)
         current_time += scene_duration
     
     # Concatenar com método compose para suportar crossfades
     final_video = concatenate_videoclips(clips, method="compose")
+    if tuple(int(v) for v in final_video.size) != TARGET_VIDEO_SIZE:
+        final_video = final_video.resize(newsize=TARGET_VIDEO_SIZE)
     final_video = final_video.set_audio(audio_clip)
     
     output_filename = f"vsl_final_{int(time.time())}.mp4"
     output_path = os.path.join(STATIC_DIR, output_filename)
     
-    print(f"[Orchestrator] Renderizando {len(clips)} cenas ({total_audio_duration:.1f}s total)...")
+    print(
+        f"[Orchestrator] Renderizando {len(clips)} cenas "
+        f"({total_audio_duration:.1f}s total) em {target_width}x{target_height}..."
+    )
     
     # Renderizar (qualidade ok sem ficar "ultrafast")
     final_video.write_videofile(
