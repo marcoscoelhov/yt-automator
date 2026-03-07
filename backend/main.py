@@ -88,6 +88,7 @@ print(f"  🎬 Render: {get_config('services.video_rendering.provider', 'moviepy
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+GEMINI_LLM_MODEL = os.getenv("GEMINI_LLM_MODEL", "gemini-2.0-flash")
 LLM_CALL_TIMEOUT_SECONDS = 120
 LLM_MAX_RETRIES = 2
 AUTO_GENERATE_MAX_SECONDS = 900
@@ -102,7 +103,7 @@ if GOOGLE_API_KEY:
 if OPENAI_API_KEY:
     print(f"  ✅ OpenAI LLM configurado ({OPENAI_MODEL})")
 else:
-    print("  ⚠️ OPENAI_API_KEY ausente: auto-generate LLM ficará indisponível até configurar .env")
+    print("  ⚠️ OPENAI_API_KEY ausente: auto-generate usará Gemini/plano de fallback")
 
 # --- Configuração da Aplicação ---
 app = FastAPI(title=get_config("app.name", "SaaS VSL Generator MVP - Real AI"))
@@ -696,18 +697,50 @@ def _build_nick_br_prompt_v2(brief: str) -> str:
 - IMPORTANTE: cada cena deve ter no MÁXIMO 2 frases curtas. Cenas rápidas e dinâmicas. Max 6 segundos por cena.\n- Use Portuguese (PT-BR), Nick BR tone: rápido, direto, \"papo reto\", com exemplos, números, e um final com CTA suave.\n- NO markdown, NO comments, NO trailing commas.\n"""
 
 
-def _llm_generate_scene_plan(brief: str) -> dict:
-    """Gera plano de cenas via OpenAI (primário para auto-generate)."""
-    if not OPENAI_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail='OPENAI_API_KEY não configurada. Configure OPENAI_API_KEY no .env para usar o auto-generate via OpenAI.'
-        )
+def _is_openai_quota_error(status_code: Optional[int], error_text: str) -> bool:
+    body = (error_text or "").lower()
+    quota_markers = [
+        "insufficient_quota",
+        "quota",
+        "billing",
+        "exceeded your current quota",
+        "rate limit",
+        "rate_limit",
+        "too many requests",
+    ]
+    return status_code == 429 or any(marker in body for marker in quota_markers)
 
-    prompt = _build_nick_br_prompt_v2(brief)
-    # Vídeos longos (8-15min) exigem JSON maior; evita truncar saída.
-    is_long_form = ('8-15' in brief or '8–15' in brief)
-    max_tokens = 12000 if is_long_form else 4096
+
+def _extract_gemini_text(response) -> str:
+    text = getattr(response, "text", None)
+    if isinstance(text, str) and text.strip():
+        return text
+
+    candidates = getattr(response, "candidates", None) or []
+    for candidate in candidates:
+        content = getattr(candidate, "content", None)
+        parts = getattr(content, "parts", None) or []
+        for part in parts:
+            part_text = getattr(part, "text", None)
+            if isinstance(part_text, str) and part_text.strip():
+                return part_text
+    return ""
+
+
+def _postprocess_scene_plan(raw_plan: dict, validate_script_structure: bool = True) -> dict:
+    catalog = _load_layers_asset_catalog()
+    plan = _validate_scene_plan(raw_plan, catalog)
+    if validate_script_structure:
+        is_valid_script, script_errors = _validate_script_structure(plan)
+        if not is_valid_script:
+            raise Exception(f"Estrutura do roteiro inválida: {script_errors}")
+    plan['scenes'] = _validate_scene_coherence(plan.get('scenes') or [], catalog)
+    return plan
+
+
+def _generate_scene_plan_openai(prompt: str, max_tokens: int) -> dict:
+    if not OPENAI_API_KEY:
+        raise Exception("OPENAI_API_KEY ausente.")
 
     max_attempts = LLM_MAX_RETRIES + 1
     last_error = None
@@ -740,29 +773,107 @@ def _llm_generate_scene_plan(brief: str) -> dict:
             )
 
             if resp.status_code >= 400:
-                raise Exception(f"HTTP {resp.status_code}: {resp.text[:400]}")
+                error_text = resp.text[:400]
+                if _is_openai_quota_error(resp.status_code, error_text):
+                    raise Exception(f"OPENAI_QUOTA_EXCEEDED: HTTP {resp.status_code}: {error_text}")
+                raise Exception(f"HTTP {resp.status_code}: {error_text}")
 
             data = resp.json()
             text = ((data.get('choices') or [{}])[0].get('message') or {}).get('content') or ''
             raw = _safe_json_extract(text)
-            catalog = _load_layers_asset_catalog()
-            plan = _validate_scene_plan(raw, catalog)
-            is_valid_script, script_errors = _validate_script_structure(plan)
-            if not is_valid_script:
-                raise Exception(f"Estrutura do roteiro inválida: {script_errors}")
-            plan['scenes'] = _validate_scene_coherence(plan.get('scenes') or [], catalog)
+            return _postprocess_scene_plan(raw, validate_script_structure=True)
+        except Exception as e:
+            last_error = e
+            is_quota = "OPENAI_QUOTA_EXCEEDED" in str(e)
+            if is_quota:
+                print(f"[AutoGenerate] OpenAI quota/rate-limit detectado: {e}")
+                break
+            if attempt < max_attempts - 1:
+                backoff_seconds = 2 ** attempt
+                print(f"[AutoGenerate] OpenAI tentativa {attempt + 1}/{max_attempts} falhou: {e}. Retry em {backoff_seconds}s.")
+                time.sleep(backoff_seconds)
+                continue
             break
+
+    raise Exception(f"Falha no OpenAI após {max_attempts} tentativas: {last_error}")
+
+
+def _generate_scene_plan_gemini(prompt: str) -> dict:
+    if not gemini_client:
+        raise Exception("Gemini indisponível (GOOGLE_API_KEY ausente).")
+
+    gemini_prompt = (
+        "Você é um gerador de roteiro JSON estrito. "
+        "Retorne APENAS JSON válido no formato solicitado, sem markdown.\n\n"
+        f"{prompt}"
+    )
+
+    max_attempts = LLM_MAX_RETRIES + 1
+    last_error = None
+    for attempt in range(max_attempts):
+        try:
+            response = gemini_client.models.generate_content(
+                model=GEMINI_LLM_MODEL,
+                contents=gemini_prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.6,
+                    response_mime_type="application/json",
+                ),
+            )
+            text = _extract_gemini_text(response)
+            if not text.strip():
+                raise Exception("Gemini retornou resposta vazia para scene_plan.")
+            raw = _safe_json_extract(text)
+            return _postprocess_scene_plan(raw, validate_script_structure=True)
         except Exception as e:
             last_error = e
             if attempt < max_attempts - 1:
                 backoff_seconds = 2 ** attempt
-                print(f"[AutoGenerate] LLM tentativa {attempt + 1}/{max_attempts} falhou: {e}. Retry em {backoff_seconds}s.")
+                print(f"[AutoGenerate] Gemini tentativa {attempt + 1}/{max_attempts} falhou: {e}. Retry em {backoff_seconds}s.")
                 time.sleep(backoff_seconds)
                 continue
-            raise HTTPException(
-                status_code=502,
-                detail=f"Falha no LLM após {max_attempts} tentativas (timeout {LLM_CALL_TIMEOUT_SECONDS}s): {e}"
-            ) from e
+            break
+
+    raise Exception(f"Falha no Gemini após {max_attempts} tentativas: {last_error}")
+
+
+def _llm_generate_scene_plan(brief: str) -> dict:
+    """Gera plano de cenas com fallback: OpenAI -> Gemini -> template pré-definido."""
+    prompt = _build_nick_br_prompt_v2(brief)
+    # Vídeos longos (8-15min) exigem JSON maior; evita truncar saída.
+    is_long_form = ('8-15' in brief or '8–15' in brief)
+    max_tokens = 12000 if is_long_form else 4096
+
+    provider_failures = []
+    plan = None
+
+    try:
+        plan = _generate_scene_plan_openai(prompt, max_tokens=max_tokens)
+        print("[AutoGenerate] Scene plan gerado via OpenAI.")
+    except Exception as e:
+        provider_failures.append(f"OpenAI: {e}")
+        print(f"[AutoGenerate] OpenAI indisponível. Acionando fallback Gemini. Motivo: {e}")
+
+    if plan is None:
+        try:
+            plan = _generate_scene_plan_gemini(prompt)
+            print(f"[AutoGenerate] Scene plan gerado via Gemini ({GEMINI_LLM_MODEL}).")
+        except Exception as e:
+            provider_failures.append(f"Gemini: {e}")
+            print(f"[AutoGenerate] Gemini indisponível. Acionando fallback pré-definido. Motivo: {e}")
+
+    if plan is None:
+        fallback_raw = _build_fallback_scene_plan(brief, long_form=is_long_form)
+        try:
+            # Fallback local já nasce em schema esperado; validamos sem passar no coerência pesada.
+            plan = _validate_scene_plan(fallback_raw, _load_layers_asset_catalog())
+        except Exception:
+            # Garantia final: retorna plano de contingência bruto se validação falhar.
+            plan = fallback_raw
+        print(
+            "[AutoGenerate] Usando plano de contingência local (templates pré-definidos). "
+            f"Falhas anteriores: {' | '.join(provider_failures)}"
+        )
 
     if is_long_form:
         plan = _enforce_target_duration(plan, min_sec=480.0, max_sec=900.0)
