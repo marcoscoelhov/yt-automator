@@ -1149,30 +1149,160 @@ def _validate_required_beats(plan: dict, short_form: bool = False) -> tuple[bool
 # Validador de coerência visual (sem LLM, keyword-based)
 # ---------------------------------------------------------------------------
 
-_SEMANTIC_RULES: list[tuple[list[str], list[str], list[str]]] = [
-    # (keywords na narração, props esperados, poses esperadas)
-    (['dinheiro', 'valor', 'preço', 'custo', 'real', 'reais', 'salário', 'renda'],
-     ['moneybag', 'coin_stack', 'piggy_bank'],
-     ['explaining_hand_up', 'pointing']),
-    (['problema', 'erro', 'perda', 'prejuízo', 'dívida', 'perder', 'cuidado'],
-     ['warning_sign', 'red_x', 'chart_down'],
-     ['worried', 'frustrated', 'shaking_no']),
-    (['solução', 'ganho', 'crescimento', 'lucro', 'resultado', 'subir', 'crescer'],
-     ['chart_up', 'green_check', 'up_arrow'],
-     ['smiling', 'relieved_exhale']),
-    (['trabalho', 'carreira', 'emprego', 'profissão', 'empresa'],
-     ['briefcase', 'contract', 'calendar'],
-     ['neutral_arms_crossed', 'thinking_hand_chin']),
-    (['luxo', 'gasto', 'comprar', 'gastar', 'consumo'],
-     ['car', 'house', 'airplane'],
-     ['surprised', 'pushing_pose']),
-    (['economia', 'poupança', 'poupar', 'guardar', 'economizar', 'reserva'],
-     ['piggy_bank', 'savings_jar', 'coin_stack'],
-     ['explaining_hand_up', 'thinking_hand_chin']),
-    (['pergunta', 'dúvida', 'por que', 'como', 'será que'],
-     ['question_mark', 'brain'],
-     ['thinking_hand_chin', 'surprised']),
+_SEMANTIC_RULES: list[dict[str, object]] = [
+    {
+        "name": "debt",
+        "keywords": ["divida", "dividas", "juros", "cartao", "fatura", "parcela", "emprestimo", "cheque especial", "atraso"],
+        "props": ["debt_pile", "phone_balance", "red_x"],
+        "poses": ["worried", "frustrated", "thinking_hand_chin"],
+        "templates": ["icons_with_red_x", "avatar_left_prop_right"],
+    },
+    {
+        "name": "money",
+        "keywords": ["dinheiro", "valor", "preco", "custo", "real", "reais", "salario", "renda", "orcamento", "grana"],
+        "props": ["moneybag", "coin_stack", "piggy_bank"],
+        "poses": ["explaining_hand_up", "pointing", "thinking_hand_chin"],
+        "templates": ["avatar_left_prop_right", "avatar_right_prop_left"],
+    },
+    {
+        "name": "growth",
+        "keywords": ["solucao", "ganho", "crescimento", "lucro", "resultado", "subir", "crescer", "melhorar", "virada", "progresso"],
+        "props": ["chart_up", "green_check", "up_arrow"],
+        "poses": ["smiling", "relieved_exhale", "pointing"],
+        "templates": ["avatar_right_prop_left", "avatar_left_prop_right"],
+    },
+    {
+        "name": "warning",
+        "keywords": ["problema", "erro", "perda", "prejuizo", "perder", "cuidado", "risco", "perigo", "armadilha"],
+        "props": ["warning_sign", "red_x", "chart_down"],
+        "poses": ["worried", "frustrated", "shaking_no"],
+        "templates": ["icons_with_red_x", "avatar_left_prop_right"],
+    },
+    {
+        "name": "planning",
+        "keywords": ["plano", "organizar", "agenda", "calendario", "meta", "metas", "mes", "meses", "passo", "etapa", "roteiro"],
+        "props": ["calendar", "paper_stack", "receipt"],
+        "poses": ["thinking_hand_chin", "explaining_hand_up", "pointing"],
+        "templates": ["avatar_left_prop_right", "avatar_center"],
+    },
+    {
+        "name": "work",
+        "keywords": ["trabalho", "carreira", "emprego", "profissao", "empresa", "salario", "contrato"],
+        "props": ["briefcase", "contract", "calendar"],
+        "poses": ["neutral_arms_crossed", "thinking_hand_chin", "explaining_hand_up"],
+        "templates": ["avatar_center", "avatar_left_prop_right"],
+    },
+    {
+        "name": "question",
+        "keywords": ["pergunta", "duvida", "por que", "como", "sera que", "sera", "nao sei", "entender"],
+        "props": ["question_mark", "brain", "paper_stack"],
+        "poses": ["thinking_hand_chin", "surprised", "pointing"],
+        "templates": ["avatar_center", "avatar_right_prop_left"],
+    },
+    {
+        "name": "saving",
+        "keywords": ["economia", "poupanca", "poupar", "guardar", "economizar", "reserva", "emergencia", "colchao"],
+        "props": ["piggy_bank", "savings_jar", "coin_stack"],
+        "poses": ["explaining_hand_up", "thinking_hand_chin", "relieved_exhale"],
+        "templates": ["avatar_left_prop_right", "avatar_right_prop_left"],
+    },
+    {
+        "name": "spending",
+        "keywords": ["luxo", "gasto", "comprar", "gastar", "consumo", "parcela", "carro", "casa", "viagem"],
+        "props": ["car", "house", "airplane"],
+        "poses": ["surprised", "pushing_pose", "worried"],
+        "templates": ["avatar_right_prop_left", "avatar_left_prop_right"],
+    },
+    {
+        "name": "food_basic",
+        "keywords": ["mercado", "comida", "cafe", "almoco", "janta", "ramen", "supermercado"],
+        "props": ["ramen", "coffee", "receipt"],
+        "poses": ["worried", "frustrated", "thinking_hand_chin"],
+        "templates": ["avatar_left_prop_right", "avatar_center"],
+    },
+    {
+        "name": "emergency",
+        "keywords": ["geladeira", "quebrou", "quebrar", "imprevisto", "emergencia", "conserto", "pane"],
+        "props": ["broken_fridge", "warning_sign", "fire"],
+        "poses": ["worried", "surprised", "frustrated"],
+        "templates": ["avatar_left_prop_right", "icons_with_red_x"],
+    },
+    {
+        "name": "phone",
+        "keywords": ["celular", "app", "extrato", "saldo", "notificacao", "banco no celular"],
+        "props": ["phone_balance", "phone_blank", "paper_stack"],
+        "poses": ["thinking_hand_chin", "worried", "pointing"],
+        "templates": ["avatar_right_prop_left", "avatar_left_prop_right"],
+    },
 ]
+
+
+def _normalize_semantic_text(text: str) -> str:
+    value = unicodedata.normalize("NFD", (text or "").lower())
+    value = "".join(ch for ch in value if unicodedata.category(ch) != "Mn")
+    value = re.sub(r"\s+", " ", value)
+    return value.strip()
+
+
+def _merge_distinct_allowed(candidates: list[str], allowed: set[str], limit: int = 3) -> list[str]:
+    merged: list[str] = []
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            continue
+        item = candidate.strip()
+        if not item:
+            continue
+        if allowed and item not in allowed:
+            continue
+        if item in merged:
+            continue
+        merged.append(item)
+        if len(merged) >= limit:
+            break
+    return merged
+
+
+def _interleave_distinct_allowed(candidate_groups: list[list[str]], allowed: set[str], limit: int = 3) -> list[str]:
+    merged: list[str] = []
+    max_len = max((len(group) for group in candidate_groups), default=0)
+    for idx in range(max_len):
+        for group in candidate_groups:
+            if idx >= len(group):
+                continue
+            candidate = group[idx]
+            items = _merge_distinct_allowed([candidate], allowed, limit=1)
+            if not items:
+                continue
+            item = items[0]
+            if item in merged:
+                continue
+            merged.append(item)
+            if len(merged) >= limit:
+                return merged
+    return merged
+
+
+def _match_semantic_rules(text: str) -> list[dict[str, object]]:
+    normalized = _normalize_semantic_text(text)
+    if not normalized:
+        return []
+
+    matches: list[dict[str, object]] = []
+    for rule in _SEMANTIC_RULES:
+        keywords = [kw for kw in (rule.get("keywords") or []) if isinstance(kw, str) and kw.strip()]
+        score = sum(1 for kw in keywords if kw in normalized)
+        if score <= 0:
+            continue
+        matches.append({"rule": rule, "score": score})
+
+    matches.sort(
+        key=lambda item: (
+            int(item.get("score") or 0),
+            len((item.get("rule") or {}).get("keywords") or []),
+        ),
+        reverse=True,
+    )
+    return matches
 
 
 def _validate_scene_coherence(scenes: list[dict], catalog: dict) -> list[dict]:
@@ -1184,48 +1314,79 @@ def _validate_scene_coherence(scenes: list[dict], catalog: dict) -> list[dict]:
     """
     allowed_props = set(catalog.get('props') or [])
     allowed_poses = set(catalog.get('avatar_poses') or [])
+    allowed_templates = set(catalog.get('templates') or [])
     fixes = []
 
     for i, sc in enumerate(scenes):
-        texto = (sc.get('texto_narracao') or '').lower()
+        texto = (sc.get('texto_narracao') or '').strip()
         beat = (sc.get('beat') or _infer_scene_beat(texto, i, len(scenes), short_form=len(scenes) <= 12)).strip().lower()
         defaults = _scene_defaults_for_beat(beat, catalog)
         current_props = sc.get('props') or []
         current_pose = sc.get('avatar_pose') or 'neutral_arms_crossed'
         current_template = sc.get('template') or defaults['template']
+        semantic_matches = _match_semantic_rules(texto)
 
         sc['caption_line'] = _derive_caption_line(sc.get('caption_line') or sc.get('texto_narracao') or '')
         sc['beat'] = beat
+        sc['template'] = current_template
+        sc['avatar_pose'] = current_pose if (not allowed_poses or current_pose in allowed_poses) else defaults.get('avatar_pose')
+        sc['props'] = _merge_distinct_allowed(list(current_props or []) + list(defaults.get("props") or []), allowed_props, limit=3)
         sc['pose_family'] = sc.get('pose_family') or defaults.get('pose_family') or beat
         sc['prop_family'] = sc.get('prop_family') or defaults.get('prop_family') or beat
 
-        # --- 1) Keyword → prop matching ---
-        best_rule = None
-        best_score = 0
-        for keywords, rule_props, rule_poses in _SEMANTIC_RULES:
-            score = sum(1 for kw in keywords if kw in texto)
-            if score > best_score:
-                best_score = score
-                best_rule = (rule_props, rule_poses)
+        # --- 1) Keyword → prop/pose/template matching ---
+        if semantic_matches:
+            best_rule = dict(semantic_matches[0]["rule"] or {})
+            semantic_props = _interleave_distinct_allowed(
+                [list((match.get("rule") or {}).get("props") or []) for match in semantic_matches[:2]],
+                allowed_props,
+                limit=3,
+            )
+            semantic_poses = _interleave_distinct_allowed(
+                [list((match.get("rule") or {}).get("poses") or []) for match in semantic_matches[:2]],
+                allowed_poses,
+                limit=3,
+            )
+            semantic_templates = _interleave_distinct_allowed(
+                [list((match.get("rule") or {}).get("templates") or []) for match in semantic_matches[:2]],
+                allowed_templates,
+                limit=2,
+            )
 
-        if best_rule and best_score >= 1:
-            suggested_props, suggested_poses = best_rule
-            # Se nenhum prop atual está na lista sugerida, corrigir
-            if not any(p in suggested_props for p in current_props):
-                # Pegar o primeiro prop sugerido que existe no catálogo
-                for sp in suggested_props:
-                    if not allowed_props or sp in allowed_props:
-                        sc['props'] = [sp] + [p for p in current_props if p != sp][:2]
-                        fixes.append(f"Cena {sc.get('id', i+1)}: props corrigidos → {sc['props']}")
-                        break
+            preferred_props = semantic_props or list(defaults.get("props") or [])
+            merged_props = _merge_distinct_allowed(
+                preferred_props + list(current_props or []) + list(defaults.get("props") or []),
+                allowed_props,
+                limit=3,
+            )
+            if merged_props and merged_props != list(current_props or []):
+                sc['props'] = merged_props
+                fixes.append(f"Cena {sc.get('id', i+1)}: props alinhados → {sc['props']}")
 
-            # Se a pose não combina, sugerir (só se existe no catálogo)
-            if current_pose not in suggested_poses:
-                for sp in suggested_poses:
-                    if not allowed_poses or sp in allowed_poses:
-                        sc['avatar_pose'] = sp
-                        fixes.append(f"Cena {sc.get('id', i+1)}: pose corrigida → {sp}")
-                        break
+            preferred_pose = next(
+                (
+                    pose for pose in (semantic_poses + [str(defaults.get("avatar_pose") or "")])
+                    if pose and (not allowed_poses or pose in allowed_poses)
+                ),
+                current_pose,
+            )
+            if preferred_pose and current_pose != preferred_pose:
+                sc['avatar_pose'] = preferred_pose
+                fixes.append(f"Cena {sc.get('id', i+1)}: pose alinhada → {preferred_pose}")
+
+            preferred_template = next(
+                (
+                    template for template in (semantic_templates + [str(defaults.get("template") or "")])
+                    if template and (not allowed_templates or template in allowed_templates)
+                ),
+                current_template,
+            )
+            if preferred_template and current_template != preferred_template:
+                sc['template'] = preferred_template
+                current_template = preferred_template
+                fixes.append(f"Cena {sc.get('id', i+1)}: template alinhado → {preferred_template}")
+        else:
+            best_rule = None
 
         # --- 2) Anti-repetição consecutiva ---
         if i > 0:
@@ -1235,11 +1396,16 @@ def _validate_scene_coherence(scenes: list[dict], catalog: dict) -> list[dict]:
             same_template = current_template == prev.get('template')
             if same_pose and same_props and best_rule:
                 # Rotacionar para próxima pose/prop disponível
-                _, rule_poses = best_rule
+                rule_poses = list(best_rule.get("poses") or [])
                 alt_poses = [p for p in rule_poses if p != sc.get('avatar_pose') and (not allowed_poses or p in allowed_poses)]
                 if alt_poses:
                     sc['avatar_pose'] = alt_poses[0]
                     fixes.append(f"Cena {sc.get('id', i+1)}: pose anti-repetição → {alt_poses[0]}")
+                rule_props = list(best_rule.get("props") or [])
+                alt_props = [p for p in rule_props if p not in (sc.get("props") or []) and (not allowed_props or p in allowed_props)]
+                if alt_props:
+                    sc['props'] = _merge_distinct_allowed((sc.get("props") or []) + alt_props, allowed_props, limit=3)
+                    fixes.append(f"Cena {sc.get('id', i+1)}: props anti-repetição → {sc['props']}")
             if same_template:
                 template_candidates = list((BEAT_LIBRARY.get(beat) or BEAT_LIBRARY["proof"])["template_candidates"])
                 alt_templates = [tpl for tpl in template_candidates if tpl != current_template and tpl in (catalog.get("templates") or [])]
@@ -3022,6 +3188,65 @@ def _caption_for_scene(scene: Scene, max_chars: int = 40) -> str:
     return _derive_caption_line(first, max_chars=max_chars)
 
 
+def _estimate_speech_units(text: str) -> float:
+    normalized = _clean_caption_text(text)
+    if not normalized:
+        return 0.0
+    words = re.findall(r"\w+", normalized, flags=re.UNICODE)
+    commas = len(re.findall(r"[,;:]", normalized))
+    endings = len(re.findall(r"[.!?]", normalized))
+    ellipsis = normalized.count("...")
+    digits = len(re.findall(r"\d+", normalized))
+    units = (
+        len(words)
+        + commas * 0.8
+        + endings * 1.6
+        + ellipsis * 1.2
+        + digits * 0.3
+    )
+    return max(1.0, float(units))
+
+
+def _split_caption_segments(scene: Scene, max_chars: int = 40) -> list[str]:
+    narration = _clean_caption_text(scene.get_narration if scene else "")
+    if not narration:
+        fallback = _caption_for_scene(scene, max_chars=max_chars) if scene else ""
+        return [fallback] if fallback else []
+
+    raw_parts: list[str] = []
+    for sentence in _split_sentences_loose(narration):
+        sentence = _clean_caption_text(sentence)
+        if not sentence:
+            continue
+        clauses = [part.strip(" ,;:-") for part in re.split(r"(?<=[,;:])\s+", sentence) if part.strip()]
+        raw_parts.extend(clauses or [sentence])
+
+    segments: list[str] = []
+    for part in raw_parts:
+        words = part.split()
+        if not words:
+            continue
+        buffer: list[str] = []
+        for word in words:
+            candidate = " ".join(buffer + [word]).strip()
+            if buffer and len(candidate) > max_chars:
+                segment = _derive_caption_line(" ".join(buffer), max_chars=max_chars)
+                if segment and (not segments or segment != segments[-1]):
+                    segments.append(segment)
+                buffer = [word]
+            else:
+                buffer.append(word)
+        if buffer:
+            segment = _derive_caption_line(" ".join(buffer), max_chars=max_chars)
+            if segment and (not segments or segment != segments[-1]):
+                segments.append(segment)
+
+    if not segments:
+        fallback = _caption_for_scene(scene, max_chars=max_chars)
+        return [fallback] if fallback else []
+    return segments
+
+
 def _format_srt_timestamp(seconds: float) -> str:
     millis = max(0, int(round(seconds * 1000)))
     hours, rem = divmod(millis, 3_600_000)
@@ -3033,25 +3258,44 @@ def _format_srt_timestamp(seconds: float) -> str:
 def _build_scene_timeline(scenes: List[Scene], total_audio_duration: float) -> list[dict]:
     if not scenes:
         return []
-    total_scene_duration = sum(scene.get_duration for scene in scenes) or float(len(scenes))
-    scale_factor = total_audio_duration / total_scene_duration if total_scene_duration > 0 else 1.0
+    scene_units = []
+    for scene in scenes:
+        spoken_text = _prepare_tts_scene_text(scene) or scene.get_narration or scene.caption_line or ""
+        scene_units.append(_estimate_speech_units(spoken_text))
+
+    total_scene_units = sum(scene_units) or float(len(scenes))
+    scale_factor = total_audio_duration / total_scene_units if total_scene_units > 0 else 1.0
     timeline = []
     cursor = 0.0
-    for idx, scene in enumerate(scenes, start=1):
-        duration = max(0.5, float(scene.get_duration) * scale_factor)
-        start = cursor
-        end = min(total_audio_duration, start + duration)
+    for idx, (scene, units) in enumerate(zip(scenes, scene_units), start=1):
+        scene_start = cursor
+        scene_duration = max(0.6, float(units) * scale_factor)
+        scene_end = min(total_audio_duration, scene_start + scene_duration)
         if idx == len(scenes):
-            end = total_audio_duration
-        timeline.append(
-            {
-                "index": idx,
-                "start": max(0.0, start),
-                "end": max(start + 0.2, end),
-                "caption": _caption_for_scene(scene),
-            }
-        )
-        cursor = end
+            scene_end = total_audio_duration
+
+        captions = _split_caption_segments(scene)
+        caption_units = [_estimate_speech_units(caption) for caption in captions]
+        total_caption_units = sum(caption_units) or 1.0
+        caption_cursor = scene_start
+        for cap_idx, (caption, cap_units) in enumerate(zip(captions, caption_units), start=1):
+            segment_duration = max(0.35, (scene_end - scene_start) * (cap_units / total_caption_units))
+            segment_end = min(scene_end, caption_cursor + segment_duration)
+            if cap_idx == len(captions):
+                segment_end = scene_end
+            timeline.append(
+                {
+                    "index": len(timeline) + 1,
+                    "scene_index": idx,
+                    "start": max(0.0, caption_cursor),
+                    "end": max(caption_cursor + 0.2, segment_end),
+                    "scene_start": max(0.0, scene_start),
+                    "scene_end": max(scene_start + 0.2, scene_end),
+                    "caption": caption,
+                }
+            )
+            caption_cursor = segment_end
+        cursor = scene_end
     return timeline
 
 
@@ -3188,14 +3432,21 @@ async def service_render_video(
     
     paired_scenes = [scene for _, scene in valid_pairs if scene]
     timeline = _build_scene_timeline(paired_scenes, total_audio_duration)
+    timeline_by_scene: dict[int, list[dict]] = {}
+    for entry in timeline:
+        scene_index = int(entry.get("scene_index") or 0)
+        if scene_index <= 0:
+            continue
+        timeline_by_scene.setdefault(scene_index, []).append(entry)
     
     clips = []
     current_time = 0
     
     for i, (img_path, scene) in enumerate(valid_pairs):
         # Duração da cena sincronizada com áudio
-        if scene and i < len(timeline):
-            scene_duration = timeline[i]["end"] - timeline[i]["start"]
+        scene_entries = timeline_by_scene.get(i + 1, [])
+        if scene_entries:
+            scene_duration = scene_entries[-1]["scene_end"] - scene_entries[0]["scene_start"]
         else:
             scene_duration = total_audio_duration / len(valid_pairs)
         
@@ -3233,12 +3484,33 @@ async def service_render_video(
 
         # Legenda 1 linha (CapCut-ish)
         try:
-            caption = _caption_for_scene(scene) if scene else ""
-            if caption:
-                cap_path = os.path.join(TEMP_DIR, f"caption_{int(time.time()*1000)}_{i}.png")
+            caption_entries = scene_entries or []
+            if not caption_entries and scene:
+                caption_entries = [{
+                    "caption": _caption_for_scene(scene),
+                    "start": 0.0,
+                    "end": scene_duration,
+                    "scene_start": 0.0,
+                    "scene_end": scene_duration,
+                }]
+            cap_clips = []
+            for cap_idx, entry in enumerate(caption_entries):
+                caption = _clean_caption_text(entry.get("caption") or "")
+                if not caption:
+                    continue
+                scene_start = float(entry.get("scene_start") or 0.0)
+                rel_start = max(0.0, float(entry.get("start") or 0.0) - scene_start)
+                rel_end = max(rel_start + 0.2, float(entry.get("end") or scene_duration) - scene_start)
+                cap_path = os.path.join(TEMP_DIR, f"caption_{int(time.time()*1000)}_{i}_{cap_idx}.png")
                 _render_caption_png(caption, cap_path, size=(width, height))
-                cap_clip = ImageClip(cap_path).set_duration(scene_duration).set_position((0, 0))
-                clip = CompositeVideoClip([clip, cap_clip])
+                cap_clips.append(
+                    ImageClip(cap_path)
+                    .set_start(rel_start)
+                    .set_duration(max(0.2, rel_end - rel_start))
+                    .set_position((0, 0))
+                )
+            if cap_clips:
+                clip = CompositeVideoClip([clip, *cap_clips]).set_duration(scene_duration)
         except Exception as e:
             print(f"  ⚠️ Legenda falhou na cena {i+1}: {e}")
 
