@@ -1,0 +1,215 @@
+{
+  "status": "completed",
+  "title": "A matemática da reserva de emergência",
+  "description": "Como construir uma reserva de emergência mesmo ganhando pouco, mudando apenas a ordem das prioridades.",
+  "scene_plan": {
+    "title": "A matemática da reserva de emergência",
+    "description": "Como construir uma reserva de emergência mesmo ganhando pouco, mudando apenas a ordem das prioridades.",
+    "script": "Você já virou a noite acordado, fazendo conta mental, porque o pneu do carro furou e o mês ainda não acabou? Imagina o alívio de saber que, se a geladeira pifar hoje, você paga o conserto sorrindo. O problema é mais simples do que parece. pessoas acha que para guardar dinheiro precisa ganhar o triplo do que ganha hoje. Mas estão completamente erradas. reserva não se monta com a sobra do mês. Ela se monta com a primeira fatia do seu salário. Meu nome é Marcos. um número onde tudo muda. Esse número é 50 reais.",
+    "scenes": [
+      {
+        "id": 1,
+        "description": null,
+        "visual_prompt": null,
+        "duration_est": null,
+        "texto_narracao": "Você já virou a noite acordado, fazendo conta mental, porque o pneu",
+        "prompt_visual": null,
+        "duracao_estimada": 5.0,
+        "tipo_transicao": "cut",
+        "style_instructions": null,
+        "template": "avatar_center",
+        "avatar_pose": "surprised",
+        "props": [
+          "question_mark",
+          "brain"
+        ],
+        "motion": "zoom_in",
+        "beat": "hook",
+        "caption_line": "Você já virou a noite acordado, fazendo conta mental, p…",
+        "pose_family": "hook",
+        "prop_family": "question"
+      },
+      {
+        "id": 2,
+        "description": null,
+        "visual_prompt": null,
+        "duration_est": null,
+        "texto_narracao": "do carro furou e o mês ainda não acabou? Imagina o alívio",
+        "prompt_visual": null,
+        "duracao_estimada": 5.0,
+        "tipo_transicao": "cut",
+        "style_instructions": null,
+        "template": "avatar_left_prop_right",
+        "avatar_pose": "worried",
+        "props": [
+          "warning_sign",
+          "red_x"
+        ],
+        "motion": "zoom_in",
+        "beat": "problem",
+        "caption_line": "do carro furou e o mês ainda não acabou",
+        "pose_family": "problem",
+        "prop_family": "warning"
+      },
+      {
+        "id": 3,
+        "description": null,
+        "visual_prompt": null,
+        "duration_est": null,
+        "texto_narracao": "de saber que, se a geladeira pifar hoje, você paga o conserto",
+        "prompt_visual": null,
+        "duracao_estimada": 5.0,
+        "tipo_transicao": "cut",
+        "style_instructions": null,
+        "template": "avatar_center",
+        "avatar_pose": "pointing",
+        "props": [
+          "red_x",
+          "warning_sign"
+        ],
+        "motion": "cut",
+        "beat": "belief_break",
+        "caption_line": "de saber que, se a geladeira pifar hoje, você paga o co…",
+        "pose_family": "authority",
+        "prop_family": "warning"
+      },
+      {
+        "id": 4,
+        "description": null,
+        "visual_prompt": null,
+        "duration_est": null,
+        "texto_narracao": "sorrindo. O problema é mais simples do que parece.",
+        "prompt_visual": null,
+        "duracao_estimada": 5.0,
+        "tipo_transicao": "cut",
+        "style_instructions": null,
+        "template": "avatar_center",
+        "avatar_pose": "neutral_arms_crossed",
+        "props": [
+          "briefcase",
+          "calendar"
+        ],
+        "motion": "zoom_out",
+        "beat": "authority",
+        "caption_line": "sorrindo",
+        "pose_family": "authority",
+        "prop_family": "credibility"
+      },
+      {
+        "id": 5,
+        "description": null,
+        "visual_prompt": null,
+        "duration_est": null,
+        "texto_narracao": "pessoas acha que para guardar dinheiro precisa ganhar o triplo do que",
+        "prompt_visual": null,
+        "duracao_estimada": 5.0,
+        "tipo_transicao": "cut",
+        "style_instructions": null,
+        "template": "metaphor_single_prop",
+        "avatar_pose": "explaining_hand_up",
+        "props": [
+          "coin_stack",
+          "chart_up"
+        ],
+        "motion": "zoom_out",
+        "beat": "analogy",
+        "caption_line": "pessoas acha que para guardar dinheiro precisa ganhar o…",
+        "pose_family": "explain",
+        "prop_family": "metaphor"
+      },
+      {
+        "id": 6,
+        "description": null,
+        "visual_prompt": null,
+        "duration_est": null,
+        "texto_narracao": "ganha hoje. Mas estão completamente erradas.",
+        "prompt_visual": null,
+        "duracao_estimada": 5.0,
+        "tipo_transicao": "cut",
+        "style_instructions": null,
+        "template": "avatar_right_prop_left",
+        "avatar_pose": "pointing",
+        "props": [
+          "chart_up",
+          "green_check"
+        ],
+        "motion": "zoom_in",
+        "beat": "proof",
+        "caption_line": "ganha hoje",
+        "pose_family": "proof",
+        "prop_family": "growth"
+      },
+      {
+        "id": 7,
+        "description": null,
+        "visual_prompt": null,
+        "duration_est": null,
+        "texto_narracao": "reserva não se monta com a sobra do mês. Ela se monta",
+        "prompt_visual": null,
+        "duracao_estimada": 5.0,
+        "tipo_transicao": "cut",
+        "style_instructions": null,
+        "template": "avatar_center",
+        "avatar_pose": "thinking_hand_chin",
+        "props": [
+          "brain",
+          "green_check"
+        ],
+        "motion": "crossfade",
+        "beat": "mindset",
+        "caption_line": "reserva não se monta com a sobra do mês",
+        "pose_family": "mindset",
+        "prop_family": "mindset"
+      },
+      {
+        "id": 8,
+        "description": null,
+        "visual_prompt": null,
+        "duration_est": null,
+        "texto_narracao": "com a primeira fatia do seu salário. Meu nome é Marcos.",
+        "prompt_visual": null,
+        "duracao_estimada": 5.0,
+        "tipo_transicao": "cut",
+        "style_instructions": null,
+        "template": "icons_with_red_x",
+        "avatar_pose": "shaking_no",
+        "props": [
+          "red_x",
+          "warning_sign"
+        ],
+        "motion": "zoom_in",
+        "beat": "warning",
+        "caption_line": "com a primeira fatia do seu salário",
+        "pose_family": "warning",
+        "prop_family": "warning"
+      },
+      {
+        "id": 9,
+        "description": null,
+        "visual_prompt": null,
+        "duration_est": null,
+        "texto_narracao": "um número onde tudo muda. Esse número é 50 reais.",
+        "prompt_visual": null,
+        "duracao_estimada": 5.0,
+        "tipo_transicao": "cut",
+        "style_instructions": null,
+        "template": "avatar_center",
+        "avatar_pose": "smiling",
+        "props": [
+          "green_check",
+          "up_arrow"
+        ],
+        "motion": "zoom_out",
+        "beat": "close",
+        "caption_line": "um número onde tudo muda",
+        "pose_family": "close",
+        "prop_family": "resolution"
+      }
+    ]
+  },
+  "video_url": "http://localhost:8020/static/vsl_final_1772993480.mp4",
+  "subtitles_url": "http://localhost:8020/static/vsl_final_1772993480.srt",
+  "message": "Auto-generate TEST MODE concluído com duração de 46.2s. | run_id=fa317467fc",
+  "job_id": null,
+  "elapsed_seconds": 577.59
+}

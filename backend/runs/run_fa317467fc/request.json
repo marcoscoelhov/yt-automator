@@ -1,0 +1,9 @@
+{
+  "brief": "Tema principal: como montar uma reserva de emergencia do zero sem ganhar mais. Publico: brasileiros 20 a 40 anos. Tom claro, confiante, sem exagero, com retencao alta e explicacao pratica.",
+  "tema": null,
+  "voice_id": "Antonio",
+  "mode": "layers",
+  "test_mode": true,
+  "target_duration_sec": 35.0,
+  "validation_mode": "relaxed"
+}

@@ -1,0 +1,9 @@
+{
+  "brief": "Tema principal: como montar uma reserva de emergencia do zero com salario apertado. Publico: brasileiros 20 a 40 anos. Tom direto, pratico, com alto poder de retencao e gancho logo na abertura.",
+  "tema": null,
+  "voice_id": "Antonio",
+  "mode": "layers",
+  "test_mode": true,
+  "target_duration_sec": 45.0,
+  "validation_mode": "relaxed"
+}

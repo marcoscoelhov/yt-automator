@@ -1,7 +1,32 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Video, FileText, Loader2, AlertCircle, CheckCircle2, Clock, Zap, Mic2, Image as ImageIcon, Upload, User, X, ChevronDown, Star, History, Trash2 } from 'lucide-react';
 
-const API_BASE = 'http://69.62.93.146:8000';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+
+function buildApiUrl(path: string) {
+  return API_BASE ? `${API_BASE}${path}` : path;
+}
+
+function normalizeVideoUrl(url: string | null | undefined) {
+  if (!url) return null;
+  if (url.startsWith('/')) return buildApiUrl(url);
+
+  try {
+    const parsedUrl = new URL(url);
+    const isLocalhost = parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1';
+
+    if (isLocalhost && API_BASE) {
+      const apiBaseUrl = new URL(API_BASE);
+      parsedUrl.protocol = apiBaseUrl.protocol;
+      parsedUrl.host = apiBaseUrl.host;
+      return parsedUrl.toString();
+    }
+
+    return parsedUrl.toString();
+  } catch {
+    return buildApiUrl(url.startsWith('/') ? url : `/${url}`);
+  }
+}
 
 interface Scene {
   id: number;
@@ -79,7 +104,7 @@ export default function App() {
 
   // Carregar configurações do backend
   useEffect(() => {
-    fetch('/config')
+    fetch(buildApiUrl('/config'))
       .then(res => res.json())
       .then(data => setPricingConfig(data.pricing))
       .catch(err => console.error("Falha ao carregar config:", err));
@@ -167,7 +192,7 @@ export default function App() {
 
       setStatus('Gerando roteiro + render (1-click)...');
 
-      const response = await fetch('/auto-generate', {
+      const response = await fetch(buildApiUrl('/auto-generate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brief, voice_id: 'Antonio', mode: 'layers' })
@@ -192,7 +217,7 @@ export default function App() {
       setCurrentStep(5);
       setProgress(100);
 
-      if (data.video_url) setVideoUrl(data.video_url);
+      if (data.video_url) setVideoUrl(normalizeVideoUrl(data.video_url));
     } catch (err: any) {
       setErrorQuery(err.message.includes('Failed to fetch') ? 'Backend offline' : err.message);
     } finally {
@@ -248,7 +273,7 @@ const handleGenerate = async () => {
         payload.reference_image_b64 = base64;
       }
 
-      const response = await fetch('/generate-video', {
+      const response = await fetch(buildApiUrl('/generate-video'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -259,7 +284,7 @@ const handleGenerate = async () => {
       setProgress(100);
 
       if (data.status === 'completed' && data.video_url) {
-        setVideoUrl(data.video_url);
+        setVideoUrl(normalizeVideoUrl(data.video_url));
       } else {
         throw new Error(data.message || 'Erro desconhecido');
       }

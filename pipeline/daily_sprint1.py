@@ -1,23 +1,27 @@
 #!/usr/bin/env python3
 import json
+import os
 import re
 import shutil
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 import requests
 
-WORKSPACE = Path('/root/.openclaw/workspace')
-YT_ROOT = WORKSPACE / 'yt-automator'
+YT_ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE = YT_ROOT.parent.parent
 RUNS_DIR = YT_ROOT / 'pipeline' / 'runs'
 RUNS_DIR.mkdir(parents=True, exist_ok=True)
 
-MEDIA_OUTBOUND = Path('/root/.openclaw/media/outbound')
+MEDIA_OUTBOUND = Path(os.getenv('YT_AUTOMATOR_MEDIA_OUTBOUND', str(WORKSPACE / 'media' / 'outbound')))
 MEDIA_OUTBOUND.mkdir(parents=True, exist_ok=True)
 
-INTEL_FILE = WORKSPACE / 'intel' / 'DAILY-INTEL.md'
+INTEL_FILE = Path(os.getenv('YT_AUTOMATOR_INTEL_FILE', str(WORKSPACE / 'intel' / 'DAILY-INTEL.md')))
 
-BACKEND_URL = 'http://69.62.93.146:8000'
+BACKEND_URL = os.getenv('YT_AUTOMATOR_BACKEND_URL', 'http://127.0.0.1:8020').rstrip('/')
+JOB_POLL_SECONDS = float(os.getenv('YT_AUTOMATOR_JOB_POLL_SECONDS', '5'))
+JOB_TIMEOUT_SECONDS = int(os.getenv('YT_AUTOMATOR_JOB_TIMEOUT_SECONDS', '3600'))
 
 
 def _log(msg: str):
@@ -155,13 +159,34 @@ def generate_video(brief: str):
         'voice_id': 'Antonio',
         'mode': 'layers',
     }
-    r = requests.post(f'{BACKEND_URL}/auto-generate', json=payload, timeout=3600)
+    r = requests.post(f'{BACKEND_URL}/auto-generate', json=payload, timeout=120)
     r.raise_for_status()
     data = r.json()
-    if data.get('status') != 'completed':
-        raise RuntimeError(data.get('message', 'auto-generate failed'))
+    job_id = data.get('job_id')
+    if not job_id:
+        raise RuntimeError(data.get('message', 'auto-generate did not return job_id'))
+
+    _log(f'job enfileirado job_id={job_id}, aguardando conclusão...')
+    deadline = time.time() + JOB_TIMEOUT_SECONDS
+    while time.time() < deadline:
+        status_resp = requests.get(f'{BACKEND_URL}/jobs/{job_id}', timeout=60)
+        status_resp.raise_for_status()
+        job = status_resp.json()
+        queue_status = job.get('queue_status')
+        stage = job.get('stage')
+        _log(f'job {job_id} status={queue_status} stage={stage}')
+        if queue_status == 'completed':
+            result_data = requests.get(f'{BACKEND_URL}/jobs/{job_id}/result', timeout=60).json()
+            data = result_data.get('result') or {}
+            break
+        if queue_status == 'failed':
+            raise RuntimeError(job.get('error') or 'auto-generate failed')
+        time.sleep(JOB_POLL_SECONDS)
+    else:
+        raise RuntimeError(f'job {job_id} excedeu timeout de {JOB_TIMEOUT_SECONDS}s')
 
     video_url = data.get('video_url')
+    subtitles_url = data.get('subtitles_url')
     local_video = None
     if isinstance(video_url, str) and '/static/' in video_url:
         name = video_url.split('/static/', 1)[1]
@@ -173,6 +198,7 @@ def generate_video(brief: str):
         'title': data.get('title'),
         'description': data.get('description'),
         'video_url': video_url,
+        'subtitles_url': subtitles_url,
         'video_path': local_video,
         'outbound_video_path': outbound_video,
         'message': data.get('message'),

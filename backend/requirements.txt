@@ -9,3 +9,4 @@ google-genai>=1.0.0
 python-dotenv
 edge-tts
 aiofiles
+pydub==0.25.1

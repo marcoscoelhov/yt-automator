@@ -1,9 +1,9 @@
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import Any, Callable, List, Optional
 import os
 import sys
 
@@ -34,6 +34,13 @@ import httpx  # Para chamadas HTTP assíncronas (Kie.ai API)
 import uuid
 import re
 import unicodedata
+from job_queue import (
+    enqueue_job,
+    get_job,
+    init_db as init_job_db,
+    list_jobs,
+    queue_stats,
+)
 
 # Monkey patch para compatibilidade Pillow 10+ com MoviePy antigo
 if not hasattr(PIL.Image, 'ANTIALIAS'):
@@ -71,12 +78,33 @@ def get_config(path: str, default=None):
 
 
 def get_static_base_url() -> str:
-    base_url = str(get_config("output.base_url", "http://localhost:8000/static/") or "").strip()
+    base_url = os.getenv("OUTPUT_BASE_URL", "").strip()
     if not base_url:
-        base_url = "http://localhost:8000/static/"
+        base_url = str(get_config("output.base_url", "") or "").strip()
+    if base_url and not re.search(r"/static/?$", base_url):
+        base_url = f"{base_url.rstrip('/')}/static"
     if not base_url.endswith("/"):
         base_url = f"{base_url}/"
     return base_url
+
+
+def get_public_static_base_url(request: Request | None = None) -> str:
+    base_url = get_static_base_url()
+    if base_url and "localhost" not in base_url and "127.0.0.1" not in base_url:
+        return base_url
+
+    if request is not None:
+        forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
+        forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+        if forwarded_host:
+            inferred = f"{forwarded_proto}://{forwarded_host}/static/"
+            return inferred
+
+    if base_url:
+        return base_url
+
+    port = int(os.getenv("SERVER_PORT") or get_config("server.port", 8000))
+    return f"http://127.0.0.1:{port}/static/"
 
 
 print(f"[Config] Carregado: {CONFIG_PATH}")
@@ -91,6 +119,9 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 LLM_CALL_TIMEOUT_SECONDS = 120
 LLM_MAX_RETRIES = 2
 AUTO_GENERATE_MAX_SECONDS = 900
+TEST_MODE_DEFAULT_DURATION_SEC = 45.0
+TEST_MODE_MIN_DURATION_SEC = 30.0
+TEST_MODE_MAX_DURATION_SEC = 59.0
 
 # Mantemos Gemini para recursos auxiliares (TTS/Imagem), mas auto-generate agora usa OpenAI.
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -114,6 +145,187 @@ RUNS_DIR = os.path.join(BASE_DIR, "runs")
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(RUNS_DIR, exist_ok=True)
+init_job_db()
+
+
+def get_render_settings() -> dict:
+    moviepy_cfg = get_config("services.video_rendering.options.moviepy", {}) or {}
+    width = int(os.getenv("VIDEO_OUTPUT_WIDTH") or moviepy_cfg.get("output_width") or 1920)
+    height = int(os.getenv("VIDEO_OUTPUT_HEIGHT") or moviepy_cfg.get("output_height") or 1080)
+    fps = int(os.getenv("VIDEO_OUTPUT_FPS") or moviepy_cfg.get("fps") or 24)
+    codec = str(os.getenv("VIDEO_OUTPUT_CODEC") or moviepy_cfg.get("codec") or "libx264")
+    audio_codec = str(os.getenv("VIDEO_OUTPUT_AUDIO_CODEC") or moviepy_cfg.get("audio_codec") or "aac")
+    preset = str(os.getenv("VIDEO_OUTPUT_PRESET") or moviepy_cfg.get("preset") or "fast")
+    crf = str(os.getenv("VIDEO_OUTPUT_CRF") or moviepy_cfg.get("crf") or "18")
+    threads = int(os.getenv("VIDEO_OUTPUT_THREADS") or moviepy_cfg.get("threads") or 4)
+    return {
+        "width": width,
+        "height": height,
+        "fps": fps,
+        "codec": codec,
+        "audio_codec": audio_codec,
+        "preset": preset,
+        "crf": crf,
+        "threads": threads,
+    }
+
+
+def get_audio_mix_settings() -> dict:
+    audio_cfg = get_config("services.audio_post", {}) or {}
+    bg_path = os.getenv("YT_AUTOMATOR_BG_MUSIC_PATH") or audio_cfg.get("background_music_path") or ""
+    bg_catalog = os.getenv("YT_AUTOMATOR_BG_MUSIC_CATALOG") or audio_cfg.get("background_music_catalog") or os.path.join("assets", "music", "catalog.json")
+    bg_gain_db = float(os.getenv("YT_AUTOMATOR_BG_MUSIC_GAIN_DB") or audio_cfg.get("background_music_gain_db") or -15.0)
+    ducking_threshold = float(os.getenv("YT_AUTOMATOR_BG_DUCK_THRESHOLD") or audio_cfg.get("ducking_threshold") or 0.035)
+    ducking_ratio = float(os.getenv("YT_AUTOMATOR_BG_DUCK_RATIO") or audio_cfg.get("ducking_ratio") or 8.0)
+    target_lufs = float(os.getenv("YT_AUTOMATOR_TARGET_LUFS") or audio_cfg.get("target_lufs") or -16.0)
+    target_lra = float(os.getenv("YT_AUTOMATOR_TARGET_LRA") or audio_cfg.get("target_lra") or 7.0)
+    hum_cut_hz = int(os.getenv("YT_AUTOMATOR_VOICE_HUM_CUT_HZ") or audio_cfg.get("voice_hum_cut_hz") or 85)
+    voice_lowpass_hz = int(os.getenv("YT_AUTOMATOR_VOICE_LOWPASS_HZ") or audio_cfg.get("voice_lowpass_hz") or 9500)
+    denoise_floor_db = float(os.getenv("YT_AUTOMATOR_VOICE_DENOISE_FLOOR_DB") or audio_cfg.get("voice_denoise_floor_db") or -20.0)
+    compressor_threshold = float(os.getenv("YT_AUTOMATOR_VOICE_COMP_THRESHOLD") or audio_cfg.get("voice_compressor_threshold") or 0.09)
+    compressor_ratio = float(os.getenv("YT_AUTOMATOR_VOICE_COMP_RATIO") or audio_cfg.get("voice_compressor_ratio") or 2.0)
+    return {
+        "background_music_path": str(bg_path).strip(),
+        "background_music_catalog": str(bg_catalog).strip(),
+        "background_music_gain_db": bg_gain_db,
+        "ducking_threshold": ducking_threshold,
+        "ducking_ratio": ducking_ratio,
+        "target_lufs": target_lufs,
+        "target_lra": target_lra,
+        "voice_hum_cut_hz": hum_cut_hz,
+        "voice_lowpass_hz": voice_lowpass_hz,
+        "voice_denoise_floor_db": denoise_floor_db,
+        "voice_compressor_threshold": compressor_threshold,
+        "voice_compressor_ratio": compressor_ratio,
+    }
+
+
+def _resolve_config_path(path_value: str) -> str:
+    if not path_value:
+        return ""
+    if os.path.isabs(path_value):
+        return path_value
+    return os.path.join(BASE_DIR, path_value)
+
+
+def _normalize_music_tokens(value: str) -> set[str]:
+    normalized = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode("ascii").lower()
+    cleaned = re.sub(r"[^a-z0-9]+", " ", normalized)
+    return {token for token in cleaned.split() if len(token) >= 3}
+
+
+def _infer_music_moods(context_text: str) -> list[str]:
+    tokens = _normalize_music_tokens(context_text)
+    moods = ["corporate", "focused"]
+
+    finance_tokens = {
+        "reserva", "emergencia", "dinheiro", "financeiro", "financas",
+        "salario", "renda", "divida", "economia", "investimento", "planejamento",
+    }
+    urgent_tokens = {"urgente", "crise", "medo", "ansiedade", "alerta", "problema"}
+    hopeful_tokens = {"solucao", "crescer", "melhorar", "seguranca", "liberdade", "estabilidade"}
+
+    if tokens & finance_tokens:
+        moods.extend(["calm", "hopeful"])
+    if tokens & urgent_tokens:
+        moods.append("tense")
+    if tokens & hopeful_tokens:
+        moods.append("uplifting")
+
+    # remover duplicados preservando ordem
+    return list(dict.fromkeys(moods))
+
+
+def _load_music_catalog() -> dict:
+    settings = get_audio_mix_settings()
+    catalog_path = _resolve_config_path(settings["background_music_catalog"])
+    if not catalog_path or not os.path.exists(catalog_path):
+        return {"tracks": []}
+    try:
+        with open(catalog_path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else {"tracks": []}
+    except Exception:
+        return {"tracks": []}
+
+
+def _resolve_catalog_track_path(track: dict) -> str:
+    local_path = str(track.get("local_path") or "").strip()
+    if not local_path:
+        return ""
+    if os.path.isabs(local_path):
+        return local_path
+    return os.path.join(BASE_DIR, "assets", "music", local_path)
+
+
+def _score_music_track(track: dict, context_text: str, moods: list[str]) -> int:
+    score = 0
+    tokens = _normalize_music_tokens(context_text)
+    track_tokens = set()
+    for key in ("title", "description", "energy"):
+        track_tokens |= _normalize_music_tokens(str(track.get(key) or ""))
+    for key in ("moods", "themes", "tags"):
+        values = track.get(key) or []
+        if isinstance(values, list):
+            for value in values:
+                track_tokens |= _normalize_music_tokens(str(value))
+
+    track_moods = {str(value).strip().lower() for value in (track.get("moods") or []) if str(value).strip()}
+    track_themes = {str(value).strip().lower() for value in (track.get("themes") or []) if str(value).strip()}
+
+    for mood in moods:
+        if mood in track_moods:
+            score += 8
+    score += len(tokens & track_tokens) * 3
+    score += len(tokens & track_themes) * 4
+
+    if str(track.get("energy") or "").strip().lower() in {"low", "medium"}:
+        score += 2
+    if track.get("content_id_registered") is False:
+        score += 1
+    return score
+
+
+def _resolve_background_music_path(context_text: str) -> str:
+    settings = get_audio_mix_settings()
+    env_path = _resolve_config_path(settings["background_music_path"])
+    if env_path and os.path.exists(env_path):
+        return env_path
+
+    catalog = _load_music_catalog()
+    tracks = catalog.get("tracks") or []
+    if not isinstance(tracks, list):
+        return ""
+
+    moods = _infer_music_moods(context_text)
+    best_path = ""
+    best_score = -1
+    best_title = ""
+
+    for track in tracks:
+        if not isinstance(track, dict):
+            continue
+        candidate_path = _resolve_catalog_track_path(track)
+        if not candidate_path or not os.path.exists(candidate_path):
+            continue
+        score = _score_music_track(track, context_text, moods)
+        if score > best_score:
+            best_score = score
+            best_path = candidate_path
+            best_title = str(track.get("title") or os.path.basename(candidate_path))
+
+    if best_path:
+        print(f"[Audio] Trilha selecionada: {best_title} ({os.path.basename(best_path)})")
+    return best_path
+
+
+def _build_audio_context(scenes: list["Scene"]) -> str:
+    parts: list[str] = []
+    for scene in scenes[:24]:
+        for value in (scene.caption_line, scene.texto_narracao, scene.beat, scene.prop_family, scene.pose_family):
+            if value:
+                parts.append(str(value))
+    return " ".join(parts)[:1200]
 
 # Montar pasta static
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -149,6 +361,10 @@ class Scene(BaseModel):
     avatar_pose: Optional[str] = None  # ex: neutral_arms_crossed
     props: Optional[List[str]] = None  # ex: ["moneybag", "red_x"]
     motion: Optional[str] = None  # ex: slow_zoom_in, pop_in_prop
+    beat: Optional[str] = None
+    caption_line: Optional[str] = None
+    pose_family: Optional[str] = None
+    prop_family: Optional[str] = None
     
     @property
     def get_narration(self) -> str:
@@ -183,7 +399,9 @@ class VideoGenerationRequest(BaseModel):
 class VideoResponse(BaseModel):
     status: str
     video_url: Optional[str] = None
+    subtitles_url: Optional[str] = None
     message: str
+    elapsed_seconds: Optional[float] = None
 
 
 # --- Auto-generate (Brief -> Nick BR JSON -> Render) ---
@@ -193,6 +411,9 @@ class AutoGenerateRequest(BaseModel):
     tema: Optional[str] = None
     voice_id: Optional[str] = "Antonio"
     mode: Optional[str] = "layers"  # force layers to avoid image-gen API calls
+    test_mode: Optional[bool] = False
+    target_duration_sec: Optional[float] = None
+    validation_mode: Optional[str] = "auto"  # auto | strict | relaxed
 
 class AutoGenerateResponse(BaseModel):
     status: str
@@ -200,7 +421,41 @@ class AutoGenerateResponse(BaseModel):
     description: Optional[str] = None
     scene_plan: Optional[dict] = None
     video_url: Optional[str] = None
+    subtitles_url: Optional[str] = None
     message: str
+    job_id: Optional[str] = None
+    run_dir: Optional[str] = None
+    elapsed_seconds: Optional[float] = None
+
+
+class JobSubmitResponse(BaseModel):
+    status: str
+    job_id: str
+    queue_status: str
+    route_name: str
+    message: str
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    job_type: str
+    route_name: str
+    queue_status: str
+    stage: str
+    attempts: int
+    max_attempts: int
+    worker_id: Optional[str] = None
+    error: Optional[str] = None
+    created_at: str
+    updated_at: str
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    progress: Optional[dict] = None
+    result: Optional[dict] = None
+
+
+class SmokeBatchRequest(AutoGenerateRequest):
+    count: int = 3
 
 
 def _read_text_file(path: str) -> str:
@@ -259,6 +514,265 @@ def _load_layers_asset_catalog() -> dict:
     return catalog
 
 
+BEAT_LIBRARY: dict[str, dict[str, object]] = {
+    "hook": {
+        "template_candidates": ["avatar_center", "avatar_left_prop_right"],
+        "pose_candidates": ["surprised", "thinking_hand_chin", "pointing"],
+        "prop_candidates": ["question_mark", "brain", "warning_sign"],
+        "pose_family": "hook",
+        "prop_family": "question",
+        "motion": "zoom_in",
+    },
+    "problem": {
+        "template_candidates": ["avatar_left_prop_right", "icons_with_red_x"],
+        "pose_candidates": ["worried", "frustrated", "shaking_no"],
+        "prop_candidates": ["warning_sign", "red_x", "chart_down"],
+        "pose_family": "problem",
+        "prop_family": "warning",
+        "motion": "zoom_in",
+    },
+    "belief_break": {
+        "template_candidates": ["avatar_center", "avatar_right_prop_left"],
+        "pose_candidates": ["pointing", "explaining_hand_up", "neutral_arms_crossed"],
+        "prop_candidates": ["red_x", "warning_sign", "brain"],
+        "pose_family": "authority",
+        "prop_family": "warning",
+        "motion": "cut",
+    },
+    "authority": {
+        "template_candidates": ["avatar_center", "avatar_left_prop_right"],
+        "pose_candidates": ["neutral_arms_crossed", "explaining_hand_up", "pointing"],
+        "prop_candidates": ["briefcase", "calendar", "contract"],
+        "pose_family": "authority",
+        "prop_family": "credibility",
+        "motion": "zoom_out",
+    },
+    "number": {
+        "template_candidates": ["avatar_left_prop_right", "avatar_right_prop_left"],
+        "pose_candidates": ["pointing", "explaining_hand_up", "thinking_hand_chin"],
+        "prop_candidates": ["coin_stack", "moneybag", "piggy_bank"],
+        "pose_family": "proof",
+        "prop_family": "money",
+        "motion": "cut",
+    },
+    "analogy": {
+        "template_candidates": ["metaphor_single_prop", "avatar_right_prop_left"],
+        "pose_candidates": ["explaining_hand_up", "thinking_hand_chin", "pointing"],
+        "prop_candidates": ["coin_stack", "chart_up", "calendar"],
+        "pose_family": "explain",
+        "prop_family": "metaphor",
+        "motion": "zoom_out",
+    },
+    "proof": {
+        "template_candidates": ["avatar_right_prop_left", "avatar_left_prop_right"],
+        "pose_candidates": ["pointing", "smiling", "explaining_hand_up"],
+        "prop_candidates": ["chart_up", "green_check", "up_arrow"],
+        "pose_family": "proof",
+        "prop_family": "growth",
+        "motion": "zoom_in",
+    },
+    "mindset": {
+        "template_candidates": ["avatar_center", "avatar_left_prop_right"],
+        "pose_candidates": ["thinking_hand_chin", "relieved_exhale", "neutral_arms_crossed"],
+        "prop_candidates": ["brain", "green_check", "calendar"],
+        "pose_family": "mindset",
+        "prop_family": "mindset",
+        "motion": "crossfade",
+    },
+    "practical": {
+        "template_candidates": ["avatar_left_prop_right", "avatar_right_prop_left"],
+        "pose_candidates": ["explaining_hand_up", "pointing", "smiling"],
+        "prop_candidates": ["piggy_bank", "receipt", "coin_stack"],
+        "pose_family": "practical",
+        "prop_family": "action",
+        "motion": "cut",
+    },
+    "warning": {
+        "template_candidates": ["icons_with_red_x", "avatar_left_prop_right"],
+        "pose_candidates": ["shaking_no", "frustrated", "worried"],
+        "prop_candidates": ["red_x", "warning_sign", "chart_down"],
+        "pose_family": "warning",
+        "prop_family": "warning",
+        "motion": "zoom_in",
+    },
+    "close": {
+        "template_candidates": ["avatar_center", "avatar_right_prop_left"],
+        "pose_candidates": ["smiling", "relieved_exhale", "neutral_arms_crossed"],
+        "prop_candidates": ["green_check", "up_arrow", "calendar"],
+        "pose_family": "close",
+        "prop_family": "resolution",
+        "motion": "zoom_out",
+    },
+}
+
+BEAT_KEYWORDS: list[tuple[list[str], str]] = [
+    (["não faça isso", "aqui é onde", "erram", "estragam", "cuidado"], "warning"),
+    (["meu nome", "eu passo tempo", "psicologia financeira", "me chamo"], "authority"),
+    (["número", "numero", "regra", "marco", "r$", "%"], "number"),
+    (["bola de neve", "gravidade", "dominó", "metáfora", "pedra"], "analogy"),
+    (["modo sobrevivência", "ansiedade", "confiança", "escassez", "crescimento"], "mindset"),
+    (["mercado", "carro", "restaurante", "demissão", "emergência", "casa"], "practical"),
+    (["maioria das pessoas", "estão erradas", "ninguém explica"], "belief_break"),
+    (["problema", "erro", "perda", "prejuízo", "dívida"], "problem"),
+    (["resultado", "subir", "crescer", "lucro", "acelera"], "proof"),
+    (["futuro", "trajetória", "decisão hoje", "amanhã"], "close"),
+]
+
+
+def _normalize_scene_text(text: str, max_sentences: int = 2, max_chars: int = 240) -> str:
+    text = _clean_caption_text(text)
+    if not text:
+        return ""
+    sentences = [part.strip() for part in re.split(r"(?<=[.!?])\s+", text) if part.strip()]
+    if len(sentences) > max_sentences:
+        text = " ".join(sentences[:max_sentences]).strip()
+    if len(text) > max_chars:
+        text = text[: max_chars - 1].rstrip() + "…"
+    return text
+
+
+def _derive_caption_line(text: str, max_chars: int = 56) -> str:
+    text = _normalize_scene_text(text, max_sentences=1, max_chars=max_chars)
+    if not text:
+        return ""
+    text = text.rstrip(".!? ")
+    if len(text) > max_chars:
+        text = text[: max_chars - 1].rstrip() + "…"
+    return text
+
+
+def _prepare_tts_scene_text(scene: Scene | dict) -> str:
+    if isinstance(scene, dict):
+        raw = scene.get("texto_narracao") or scene.get("description") or ""
+        beat = (scene.get("beat") or "").strip().lower()
+    else:
+        raw = scene.get_narration
+        beat = (scene.beat or "").strip().lower()
+
+    text = _normalize_scene_text(raw, max_sentences=2, max_chars=260)
+    if not text:
+        return ""
+    if text[-1] not in ".!?":
+        text = text.rstrip(",;: ") + "."
+
+    pause_map = {
+        "hook": "...",
+        "problem": "...",
+        "belief_break": ".",
+        "authority": ".",
+        "number": ".",
+        "analogy": "...",
+        "proof": ".",
+        "mindset": "...",
+        "practical": ".",
+        "warning": "...",
+        "close": ".",
+    }
+    pause = pause_map.get(beat, ".")
+    return f"{text} {pause}".strip()
+
+
+def _build_tts_script(scenes: List[Scene]) -> str:
+    chunks = []
+    for scene in scenes:
+        chunk = _prepare_tts_scene_text(scene)
+        if chunk:
+            chunks.append(chunk)
+    return "\n\n".join(chunks).strip()
+
+
+def _build_target_beats(scene_count: int, short_form: bool) -> list[str]:
+    if scene_count <= 0:
+        return []
+    if short_form:
+        base = ["hook", "problem", "number", "proof", "practical", "warning", "close"]
+    else:
+        base = ["hook", "problem", "belief_break", "authority", "number", "analogy", "proof", "mindset", "practical", "warning", "close"]
+    if scene_count <= len(base):
+        return [base[min(int(i * len(base) / scene_count), len(base) - 1)] for i in range(scene_count)]
+
+    beats = []
+    for idx in range(scene_count):
+        ratio = idx / max(scene_count - 1, 1)
+        if ratio < 0.08:
+            beats.append("hook")
+        elif ratio < 0.18:
+            beats.append("problem")
+        elif ratio < 0.28:
+            beats.append("belief_break")
+        elif ratio < 0.38:
+            beats.append("authority")
+        elif ratio < 0.50:
+            beats.append("number")
+        elif ratio < 0.62:
+            beats.append("analogy")
+        elif ratio < 0.75:
+            beats.append("proof")
+        elif ratio < 0.86:
+            beats.append("mindset" if idx % 2 == 0 else "practical")
+        elif ratio < 0.94:
+            beats.append("warning")
+        else:
+            beats.append("close")
+    return beats
+
+
+def _infer_scene_beat(text: str, idx: int, total_scenes: int, short_form: bool = False) -> str:
+    normalized = unicodedata.normalize("NFD", (text or "").lower())
+    normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    normalized = " ".join(normalized.split())
+    for keywords, beat in BEAT_KEYWORDS:
+        normalized_keywords = []
+        for keyword in keywords:
+            nk = unicodedata.normalize("NFD", keyword.lower())
+            nk = "".join(ch for ch in nk if unicodedata.category(ch) != "Mn")
+            normalized_keywords.append(" ".join(nk.split()))
+        if any(keyword in normalized for keyword in normalized_keywords):
+            return beat
+    target_beats = _build_target_beats(total_scenes or 1, short_form=short_form)
+    if idx < len(target_beats):
+        return target_beats[idx]
+    return target_beats[-1] if target_beats else "proof"
+
+
+def _pick_first_allowed(candidates: list[str], allowed: set[str], fallback: str) -> str:
+    for candidate in candidates:
+        if not allowed or candidate in allowed:
+            return candidate
+    return fallback
+
+
+def _scene_defaults_for_beat(beat: str, catalog: dict) -> dict:
+    beat_config = BEAT_LIBRARY.get(beat) or BEAT_LIBRARY["proof"]
+    allowed_templates = set(catalog.get("templates") or [])
+    allowed_poses = set(catalog.get("avatar_poses") or [])
+    allowed_props = set(catalog.get("props") or [])
+    template = _pick_first_allowed(
+        list(beat_config["template_candidates"]),
+        allowed_templates,
+        "avatar_left_prop_right",
+    )
+    pose = _pick_first_allowed(
+        list(beat_config["pose_candidates"]),
+        allowed_poses,
+        "neutral_arms_crossed",
+    )
+    props = []
+    for candidate in beat_config["prop_candidates"]:
+        if not allowed_props or candidate in allowed_props:
+            props.append(candidate)
+        if len(props) >= 2:
+            break
+    return {
+        "template": template,
+        "avatar_pose": pose,
+        "props": props,
+        "motion": beat_config.get("motion"),
+        "pose_family": beat_config.get("pose_family"),
+        "prop_family": beat_config.get("prop_family"),
+    }
+
+
 def _validate_scene_plan(plan: dict, catalog: dict | None = None) -> dict:
     if not isinstance(plan, dict):
         raise Exception('scene_plan must be an object')
@@ -282,37 +796,16 @@ def _validate_scene_plan(plan: dict, catalog: dict | None = None) -> dict:
     allowed_templates = set(catalog['templates'])
     allowed_poses = set(catalog['avatar_poses'])
     allowed_props = set(catalog['props'])
-
-    # FIX 1: Expansões contextuais para cenas curtas
-    CONTEXTUAL_EXPANSIONS = [
-        "Esse detalhe faz toda diferença quando você aplica na prática.",
-        "Isso é algo que poucos percebem, mas muda o resultado final.",
-        "Se você prestar atenção nisso, vai evitar o erro mais comum.",
-        "Quando você entende esse ponto, o próximo passo fica natural.",
-        "Aqui está o segredo que ninguém conta: consistência vence intensidade.",
-        "Observe como isso se conecta com sua rotina financeira atual.",
-        "Esse princípio funciona porque mexe com decisões, não só com dinheiro.",
-        "Aplique isso por 30 dias e compare com o mês anterior.",
-        "É simples, mas exige disciplina diária. E funciona.",
-        "Quando você domina isso, ganha liberdade de escolha.",
-    ]
+    short_form = len(scenes) <= 12
 
     normalized_scenes = []
     for i, sc in enumerate(scenes, start=1):
         if not isinstance(sc, dict):
             raise Exception(f'Scene {i} must be an object')
 
-        texto = (sc.get('texto_narracao') or sc.get('description') or '').strip()
-        if len(texto) < 5:
+        texto = _normalize_scene_text(sc.get('texto_narracao') or sc.get('description') or '')
+        if len(texto) < 20:
             raise Exception(f'Scene {i} missing texto_narracao')
-
-        # FIX 1: Garantir mínimo de 150 caracteres com expansão contextual
-        if len(texto) < 150:
-            expansion = CONTEXTUAL_EXPANSIONS[i % len(CONTEXTUAL_EXPANSIONS)]
-            texto = f"{texto} {expansion}"
-            if len(texto) < 150:
-                # Se ainda estiver curto, adicionar mais uma expansão
-                texto = f"{texto} {CONTEXTUAL_EXPANSIONS[(i+1) % len(CONTEXTUAL_EXPANSIONS)]}"
 
         dur = sc.get('duracao_estimada') or sc.get('duration_est') or 5.0
         try:
@@ -322,23 +815,30 @@ def _validate_scene_plan(plan: dict, catalog: dict | None = None) -> dict:
         if dur < 2.5: dur = 2.5
         if dur > 6.0: dur = 6.0
 
-        template = (sc.get('template') or 'avatar_left_prop_right').strip()
+        beat = (sc.get('beat') or '').strip().lower() or _infer_scene_beat(texto, i - 1, len(scenes), short_form=short_form)
+        defaults = _scene_defaults_for_beat(beat, catalog)
+
+        template = (sc.get('template') or defaults['template'] or 'avatar_left_prop_right').strip()
         if template not in allowed_templates:
-            template = 'avatar_left_prop_right'
+            template = str(defaults['template'])
 
-        pose = (sc.get('avatar_pose') or 'neutral_arms_crossed').strip()
+        pose = (sc.get('avatar_pose') or defaults['avatar_pose'] or 'neutral_arms_crossed').strip()
         if allowed_poses and pose not in allowed_poses and len(allowed_poses) > 0:
-            pose = 'neutral_arms_crossed'
+            pose = str(defaults['avatar_pose'])
 
-        props = sc.get('props') or []
+        props = sc.get('props') or defaults['props'] or []
         if not isinstance(props, list):
-            props = []
+            props = list(defaults['props'] or [])
         props2 = []
         for p in props[:3]:
             if isinstance(p, str) and (not allowed_props or (len(allowed_props) > 0 and p in allowed_props)):
                 props2.append(p)
         if template == 'icons_with_red_x' and 'red_x' not in props2:
             props2 = (props2 + ['red_x'])[:3]
+
+        caption_line = _derive_caption_line(sc.get('caption_line') or texto)
+        if not caption_line:
+            raise Exception(f'Scene {i} missing caption_line')
 
         normalized_scenes.append({
             'id': i,
@@ -349,18 +849,22 @@ def _validate_scene_plan(plan: dict, catalog: dict | None = None) -> dict:
             'template': template,
             'avatar_pose': pose,
             'props': props2,
-            'motion': (sc.get('motion') or None),
+            'motion': (sc.get('motion') or defaults.get('motion') or None),
+            'beat': beat,
+            'caption_line': caption_line,
+            'pose_family': (sc.get('pose_family') or defaults.get('pose_family') or beat),
+            'prop_family': (sc.get('prop_family') or defaults.get('prop_family') or beat),
         })
 
     return {
         'title': title.strip(),
         'description': description.strip(),
-        'script': script.strip(),
+        'script': " ".join(_scene_narration_list({"scenes": normalized_scenes})) or script.strip(),
         'scenes': normalized_scenes,
     }
 
 
-def _validate_script_structure(plan: dict) -> tuple[bool, list[str]]:
+def _validate_script_structure(plan: dict, min_sections_required: int = 5) -> tuple[bool, list[str]]:
     """Valida estrutura do metaprompt no script e retorna (is_valid, errors)."""
     errors: list[str] = []
 
@@ -417,7 +921,6 @@ def _validate_script_structure(plan: dict) -> tuple[bool, list[str]]:
         matched_sections += 1
         cursor = min(valid_matches) + 1
 
-    min_sections_required = 5
     if matched_sections < min_sections_required:
         errors.append(
             f"Estrutura insuficiente: {matched_sections}/{len(required_sections)} seções detectadas "
@@ -442,6 +945,26 @@ def _validate_script_structure(plan: dict) -> tuple[bool, list[str]]:
         errors.append(f"PROIBIÇÃO: bullet points em excesso ({extra_bullets} encontrados)")
 
     return (len(errors) == 0, errors)
+
+
+def _validate_required_beats(plan: dict, short_form: bool = False) -> tuple[bool, list[str]]:
+    scenes = plan.get("scenes") or []
+    beats = [str(sc.get("beat") or "").strip().lower() for sc in scenes if isinstance(sc, dict)]
+    required = ["hook", "number", "practical", "close"] if short_form else [
+        "hook",
+        "belief_break",
+        "authority",
+        "number",
+        "analogy",
+        "mindset",
+        "practical",
+        "warning",
+        "close",
+    ]
+    missing = [beat for beat in required if beat not in beats]
+    if missing:
+        return False, [f"Beat coverage insuficiente: faltando {', '.join(missing)}"]
+    return True, []
 
 
 # ---------------------------------------------------------------------------
@@ -487,8 +1010,16 @@ def _validate_scene_coherence(scenes: list[dict], catalog: dict) -> list[dict]:
 
     for i, sc in enumerate(scenes):
         texto = (sc.get('texto_narracao') or '').lower()
+        beat = (sc.get('beat') or _infer_scene_beat(texto, i, len(scenes), short_form=len(scenes) <= 12)).strip().lower()
+        defaults = _scene_defaults_for_beat(beat, catalog)
         current_props = sc.get('props') or []
         current_pose = sc.get('avatar_pose') or 'neutral_arms_crossed'
+        current_template = sc.get('template') or defaults['template']
+
+        sc['caption_line'] = _derive_caption_line(sc.get('caption_line') or sc.get('texto_narracao') or '')
+        sc['beat'] = beat
+        sc['pose_family'] = sc.get('pose_family') or defaults.get('pose_family') or beat
+        sc['prop_family'] = sc.get('prop_family') or defaults.get('prop_family') or beat
 
         # --- 1) Keyword → prop matching ---
         best_rule = None
@@ -523,6 +1054,7 @@ def _validate_scene_coherence(scenes: list[dict], catalog: dict) -> list[dict]:
             prev = scenes[i - 1]
             same_pose = sc.get('avatar_pose') == prev.get('avatar_pose')
             same_props = sc.get('props') == prev.get('props')
+            same_template = current_template == prev.get('template')
             if same_pose and same_props and best_rule:
                 # Rotacionar para próxima pose/prop disponível
                 _, rule_poses = best_rule
@@ -530,6 +1062,12 @@ def _validate_scene_coherence(scenes: list[dict], catalog: dict) -> list[dict]:
                 if alt_poses:
                     sc['avatar_pose'] = alt_poses[0]
                     fixes.append(f"Cena {sc.get('id', i+1)}: pose anti-repetição → {alt_poses[0]}")
+            if same_template:
+                template_candidates = list((BEAT_LIBRARY.get(beat) or BEAT_LIBRARY["proof"])["template_candidates"])
+                alt_templates = [tpl for tpl in template_candidates if tpl != current_template and tpl in (catalog.get("templates") or [])]
+                if alt_templates:
+                    sc['template'] = alt_templates[0]
+                    fixes.append(f"Cena {sc.get('id', i+1)}: template anti-repetição → {alt_templates[0]}")
 
         # --- 3) Timing: chars vs duração ---
         texto_len = len(sc.get('texto_narracao') or '')
@@ -550,7 +1088,67 @@ def _validate_scene_coherence(scenes: list[dict], catalog: dict) -> list[dict]:
     return scenes
 
 
-def _build_fallback_scene_plan(brief: str, long_form: bool = True) -> dict:
+def _scene_narration_list(plan: dict) -> list[str]:
+    scenes = plan.get('scenes') or []
+    narrations = []
+    for sc in scenes:
+        if isinstance(sc, dict):
+            text = (sc.get('texto_narracao') or sc.get('description') or '').strip()
+            if text:
+                narrations.append(text)
+    return narrations
+
+
+def _fit_short_form_plan(plan: dict, target_duration_sec: float) -> dict:
+    scenes = [dict(sc) for sc in (plan.get('scenes') or []) if isinstance(sc, dict)]
+    if not scenes:
+        return plan
+
+    target_duration_sec = max(TEST_MODE_MIN_DURATION_SEC, min(TEST_MODE_MAX_DURATION_SEC, float(target_duration_sec)))
+    target_scene_count = max(6, min(12, int(round(target_duration_sec / 5.0))))
+    base_scene_duration = round(target_duration_sec / target_scene_count, 1)
+    base_scene_duration = max(3.5, min(6.0, base_scene_duration))
+
+    if len(scenes) > target_scene_count:
+        scenes = scenes[:target_scene_count]
+
+    filler_idx = 0
+    while len(scenes) < target_scene_count:
+        base = dict(scenes[filler_idx % len(scenes)])
+        base['id'] = len(scenes) + 1
+        extra = " Mantem o ritmo e prepara a próxima virada."
+        text = (base.get('texto_narracao') or '').strip()
+        if text and extra.strip() not in text:
+            base['texto_narracao'] = f"{text}{extra}"
+        scenes.append(base)
+        filler_idx += 1
+
+    for idx, sc in enumerate(scenes, start=1):
+        text = (sc.get('texto_narracao') or '').strip()
+        if text:
+            sc['texto_narracao'] = _normalize_scene_text(text, max_sentences=2, max_chars=220)
+        sc['id'] = idx
+        sc['duracao_estimada'] = base_scene_duration
+        sc['beat'] = (sc.get('beat') or _infer_scene_beat(sc.get('texto_narracao') or '', idx - 1, len(scenes), short_form=True))
+        sc['caption_line'] = _derive_caption_line(sc.get('caption_line') or sc.get('texto_narracao') or '')
+        sc['pose_family'] = sc.get('pose_family') or sc['beat']
+        sc['prop_family'] = sc.get('prop_family') or sc['beat']
+
+    plan['scenes'] = scenes
+    plan['script'] = " ".join(_scene_narration_list(plan))
+    return plan
+
+
+def _normalize_validation_mode(value: str | None, *, test_mode: bool = False) -> str:
+    normalized = (value or "auto").strip().lower()
+    if normalized not in {"auto", "strict", "relaxed"}:
+        normalized = "auto"
+    if normalized == "auto":
+        return "relaxed" if test_mode else "strict"
+    return normalized
+
+
+def _build_fallback_scene_plan(brief: str, long_form: bool = True, target_duration_sec: float | None = None) -> dict:
     """Plano de contingência quando o LLM não retorna JSON válido."""
     catalog = _load_layers_asset_catalog()
     template = (catalog.get('templates') or ['avatar_left_prop_right'])[0]
@@ -562,42 +1160,83 @@ def _build_fallback_scene_plan(brief: str, long_form: bool = True) -> dict:
     if not theme:
         theme = 'como sair do modo sobrevivência financeira'
 
-    scene_count = 120 if long_form else 18
-    dur = 6.0 if long_form else 5.5
+    if long_form:
+        scene_count = 120
+        dur = 6.0
+    else:
+        target_duration_sec = target_duration_sec or TEST_MODE_DEFAULT_DURATION_SEC
+        target_duration_sec = max(TEST_MODE_MIN_DURATION_SEC, min(TEST_MODE_MAX_DURATION_SEC, float(target_duration_sec)))
+        scene_count = max(6, min(12, int(round(target_duration_sec / 5.0))))
+        dur = round(target_duration_sec / scene_count, 1)
+        dur = max(3.5, min(6.0, dur))
 
-    beats = [
-        'Você sente que trabalha muito e o dinheiro nunca sobra.',
-        'Hoje eu vou te mostrar a virada em passos simples e práticos.',
-        'Primeiro, entenda o erro invisível que trava sua evolução.',
-        'Agora vem a conta simples que quase ninguém faz.',
-        'Quando você muda esse padrão, sua margem financeira aparece.',
-        'Com margem, você ganha poder de escolha no trabalho e na vida.',
-        'Sem consistência, qualquer plano quebra no meio do caminho.',
-        'Com um método claro, você acelera sem depender de motivação.',
-    ]
-
-    # FIX 1: Expansões contextuais para garantir 150+ chars
-    CONTEXTUAL_EXPANSIONS = [
-        "Esse detalhe faz toda diferença quando você aplica na prática.",
-        "Isso é algo que poucos percebem, mas muda o resultado final.",
-        "Se você prestar atenção nisso, vai evitar o erro mais comum.",
-    ]
+    beat_copy = {
+        "hook": [
+            "Você trabalha, recebe e mesmo assim sente que o dinheiro some rápido demais.",
+            "Tem alguma coisa invisível puxando você para trás.",
+        ],
+        "problem": [
+            "O problema não é só ganhar pouco.",
+            "É repetir decisões que mantêm você no modo sobrevivência.",
+        ],
+        "belief_break": [
+            "A maioria das pessoas acha que precisa de um salto gigante de renda.",
+            "Mas quase sempre o jogo vira antes disso.",
+        ],
+        "authority": [
+            "Eu passo tempo demais estudando dinheiro e comportamento.",
+            "E existe um padrão que aparece toda vez.",
+        ],
+        "number": [
+            "Existe um número que muda sua sensação de sufoco.",
+            "Quando ele aparece, você para de decidir no desespero.",
+        ],
+        "analogy": [
+            "É como empurrar uma bola no começo da descida.",
+            "No início parece pesado, depois ela ganha tração sozinha.",
+        ],
+        "proof": [
+            "O primeiro marco demora mais.",
+            "Depois o progresso acelera e o esforço começa a render.",
+        ],
+        "mindset": [
+            "Sua cabeça sai da escassez e entra em estratégia.",
+            "Você começa a escolher melhor, não só reagir.",
+        ],
+        "practical": [
+            "Isso aparece no mercado, no carro, na conta surpresa e até numa demissão.",
+            "Você ganha margem para respirar e agir.",
+        ],
+        "warning": [
+            "Aqui é onde muita gente estraga tudo.",
+            "Ela melhora um pouco e volta a inflar o padrão de vida.",
+        ],
+        "close": [
+            "Não é sobre ficar rico rápido.",
+            "É sobre mudar sua trajetória com consistência a partir de agora.",
+        ],
+    }
 
     scenes = []
-    for i in range(scene_count):
-        beat = beats[i % len(beats)]
-        texto_base = beat  # Keep text short (1-2 sentences max) for dynamic pacing
-        
+    target_beats = _build_target_beats(scene_count, short_form=not long_form)
+    for i, beat in enumerate(target_beats):
+        defaults = _scene_defaults_for_beat(beat, catalog)
+        pieces = beat_copy.get(beat) or beat_copy["proof"]
+        texto_base = " ".join(pieces)
         scenes.append({
             'id': i + 1,
-            'texto_narracao': texto_base,
+            'texto_narracao': _normalize_scene_text(texto_base),
             'prompt_visual': None,
             'duracao_estimada': dur,
-            'tipo_transicao': 'cut',
-            'template': template,
-            'avatar_pose': pose,
-            'props': [],
-            'motion': None,
+            'tipo_transicao': defaults.get('motion') or 'cut',
+            'template': defaults.get('template') or template,
+            'avatar_pose': defaults.get('avatar_pose') or pose,
+            'props': list(defaults.get('props') or []),
+            'motion': defaults.get('motion'),
+            'beat': beat,
+            'caption_line': _derive_caption_line(texto_base),
+            'pose_family': defaults.get('pose_family') or beat,
+            'prop_family': defaults.get('prop_family') or beat,
         })
 
     return {
@@ -642,7 +1281,8 @@ def _enforce_target_duration(plan: dict, min_sec: float = 480.0, max_sec: float 
             txt = (s.get('texto_narracao') or '').strip()
             if txt and len(txt) < 180:
                 expansion = INTELLIGENT_EXPANSIONS[i % len(INTELLIGENT_EXPANSIONS)]
-                s['texto_narracao'] = f"{txt} {expansion}"
+                s['texto_narracao'] = _normalize_scene_text(f"{txt} {expansion}", max_sentences=2, max_chars=240)
+                s['caption_line'] = _derive_caption_line(s['texto_narracao'])
         
         total = sum(float(s.get('duracao_estimada') or 0) for s in scenes)
 
@@ -654,8 +1294,9 @@ def _enforce_target_duration(plan: dict, min_sec: float = 480.0, max_sec: float 
         
         # FIX 4: Usar expansões variadas ao duplicar
         expansion = INTELLIGENT_EXPANSIONS[(i + 3) % len(INTELLIGENT_EXPANSIONS)]
-        base['texto_narracao'] = (base.get('texto_narracao') or '').strip() + f" {expansion}"
+        base['texto_narracao'] = _normalize_scene_text((base.get('texto_narracao') or '').strip() + f" {expansion}", max_sentences=2, max_chars=240)
         base['duracao_estimada'] = max(4.0, min(6.0, float(base.get('duracao_estimada') or 7.0)))
+        base['caption_line'] = _derive_caption_line(base.get('caption_line') or base['texto_narracao'])
         scenes.append(base)
         total += float(base['duracao_estimada'])
         i += 1
@@ -672,7 +1313,7 @@ def _enforce_target_duration(plan: dict, min_sec: float = 480.0, max_sec: float 
     return plan
 
 
-def _build_nick_br_prompt_v2(brief: str) -> str:
+def _build_nick_br_prompt_v2(brief: str, short_form: bool = False, target_duration_sec: float | None = None) -> str:
     prompt_path = os.path.join(BASE_DIR, 'prompts', 'metaprompt_nick.md')
     meta = _read_text_file(prompt_path) if os.path.exists(prompt_path) else ''
     catalog = _load_layers_asset_catalog()
@@ -692,82 +1333,189 @@ def _build_nick_br_prompt_v2(brief: str) -> str:
 - Variar entre os 5 templates disponíveis ao longo do vídeo
 """
 
-    return f"""{meta}\n\n# INPUT BRIEF\n{brief.strip()}\n\n# AVAILABLE LAYERS ASSETS (STRICT)\nTemplates: {catalog['templates']}\nAvatar poses: {catalog['avatar_poses'][:30]}{' ...' if len(catalog['avatar_poses'])>30 else ''}\nProps: {catalog['props'][:60]}{' ...' if len(catalog['props'])>60 else ''}\n\n{visual_matching_rules}\n\n# OUTPUT FORMAT\nReturn ONLY valid JSON with keys: title, description, script, scenes.\n- scenes must be an array of objects with: texto_narracao (MAX 2 frases curtas por cena), duracao_estimada (4-6), template, avatar_pose, props (0-3).
+    mode_rules = ""
+    if short_form:
+        target_duration_sec = target_duration_sec or TEST_MODE_DEFAULT_DURATION_SEC
+        target_duration_sec = max(TEST_MODE_MIN_DURATION_SEC, min(TEST_MODE_MAX_DURATION_SEC, float(target_duration_sec)))
+        scene_count = max(6, min(12, int(round(target_duration_sec / 5.0))))
+        mode_rules = f"""
+# TEST MODE (obrigatório)
+- Gere um vídeo curto de aproximadamente {int(target_duration_sec)} segundos.
+- Use entre {scene_count - 1} e {scene_count + 1} cenas.
+- Cada cena deve ter no máximo 1 ou 2 frases bem curtas.
+- Foque em uma única ideia central do brief, sem tentar cobrir toda a arquitetura longa.
+- Priorize hook forte, clareza, ritmo e retenção.
+"""
+
+    return f"""{meta}\n\n# INPUT BRIEF\n{brief.strip()}\n\n# AVAILABLE LAYERS ASSETS (STRICT)\nTemplates: {catalog['templates']}\nAvatar poses: {catalog['avatar_poses'][:30]}{' ...' if len(catalog['avatar_poses'])>30 else ''}\nProps: {catalog['props'][:60]}{' ...' if len(catalog['props'])>60 else ''}\n\n{visual_matching_rules}\n{mode_rules}\n# OUTPUT FORMAT\nReturn ONLY valid JSON with keys: title, description, script, scenes.\n- scenes must be an array of objects with: texto_narracao (MAX 2 frases curtas por cena), caption_line (1 linha curta estilo CapCut), beat, duracao_estimada (4-6), template, avatar_pose, props (0-3), pose_family, prop_family.
 - IMPORTANTE: cada cena deve ter no MÁXIMO 2 frases curtas. Cenas rápidas e dinâmicas. Max 6 segundos por cena.\n- Use Portuguese (PT-BR), Nick BR tone: rápido, direto, \"papo reto\", com exemplos, números, e um final com CTA suave.\n- NO markdown, NO comments, NO trailing commas.\n"""
 
 
-def _llm_generate_scene_plan(brief: str) -> dict:
+def _llm_generate_scene_plan(
+    brief: str,
+    short_form: bool = False,
+    target_duration_sec: float | None = None,
+    validation_mode: str = "strict",
+) -> dict:
     """Gera plano de cenas via OpenAI (primário para auto-generate)."""
-    if not OPENAI_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail='OPENAI_API_KEY não configurada. Configure OPENAI_API_KEY no .env para usar o auto-generate via OpenAI.'
-        )
-
-    prompt = _build_nick_br_prompt_v2(brief)
+    prompt = _build_nick_br_prompt_v2(brief, short_form=short_form, target_duration_sec=target_duration_sec)
     # Vídeos longos (8-15min) exigem JSON maior; evita truncar saída.
-    is_long_form = ('8-15' in brief or '8–15' in brief)
+    is_long_form = not short_form and (('8-15' in brief or '8–15' in brief) or (target_duration_sec or 0) >= 480)
     max_tokens = 12000 if is_long_form else 4096
 
     max_attempts = LLM_MAX_RETRIES + 1
     last_error = None
 
-    for attempt in range(max_attempts):
+    def _finalize_plan(raw: dict, allow_relaxed_script: bool = False, allow_plan_fallback: bool = False) -> dict:
+        catalog = _load_layers_asset_catalog()
         try:
-            resp = requests.post(
-                f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {OPENAI_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": OPENAI_MODEL,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "Você é um gerador de roteiro JSON estrito. Responda apenas JSON válido sem markdown."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt,
-                        },
-                    ],
-                    "temperature": 0.6,
-                    "max_completion_tokens": max_tokens,
-                    "response_format": {"type": "json_object"},
-                },
-                timeout=LLM_CALL_TIMEOUT_SECONDS,
+            plan = _validate_scene_plan(raw, catalog)
+        except Exception:
+            if not allow_plan_fallback:
+                raise
+            print("[AutoGenerate] JSON utilizável, mas plano inválido. Aplicando fallback determinístico.")
+            plan = _build_fallback_scene_plan(
+                brief,
+                long_form=not short_form,
+                target_duration_sec=target_duration_sec,
             )
 
-            if resp.status_code >= 400:
-                raise Exception(f"HTTP {resp.status_code}: {resp.text[:400]}")
-
-            data = resp.json()
-            text = ((data.get('choices') or [{}])[0].get('message') or {}).get('content') or ''
-            raw = _safe_json_extract(text)
-            catalog = _load_layers_asset_catalog()
-            plan = _validate_scene_plan(raw, catalog)
-            is_valid_script, script_errors = _validate_script_structure(plan)
-            if not is_valid_script:
+        min_sections_required = 2 if short_form else (8 if validation_mode == "strict" else 5)
+        is_valid_script, script_errors = _validate_script_structure(
+            plan,
+            min_sections_required=min_sections_required,
+        )
+        has_beats, beat_errors = _validate_required_beats(plan, short_form=short_form)
+        if not is_valid_script:
+            if not allow_relaxed_script:
                 raise Exception(f"Estrutura do roteiro inválida: {script_errors}")
-            plan['scenes'] = _validate_scene_coherence(plan.get('scenes') or [], catalog)
-            break
-        except Exception as e:
-            last_error = e
-            if attempt < max_attempts - 1:
-                backoff_seconds = 2 ** attempt
-                print(f"[AutoGenerate] LLM tentativa {attempt + 1}/{max_attempts} falhou: {e}. Retry em {backoff_seconds}s.")
-                time.sleep(backoff_seconds)
-                continue
-            raise HTTPException(
-                status_code=502,
-                detail=f"Falha no LLM após {max_attempts} tentativas (timeout {LLM_CALL_TIMEOUT_SECONDS}s): {e}"
-            ) from e
+            print(f"[AutoGenerate] Validação estrutural relaxada: {script_errors}")
+            plan['script'] = " ".join(_scene_narration_list(plan))
+        if not has_beats:
+            if not allow_relaxed_script:
+                raise Exception(f"Estrutura por beats inválida: {beat_errors}")
+            print(f"[AutoGenerate] Validação de beats relaxada: {beat_errors}")
 
-    if is_long_form:
-        plan = _enforce_target_duration(plan, min_sec=480.0, max_sec=900.0)
+        plan['scenes'] = _validate_scene_coherence(plan.get('scenes') or [], catalog)
+        if short_form:
+            plan = _fit_short_form_plan(
+                plan,
+                target_duration_sec or TEST_MODE_DEFAULT_DURATION_SEC,
+            )
+        elif is_long_form:
+            plan = _enforce_target_duration(plan, min_sec=480.0, max_sec=900.0)
+        return plan
 
-    return plan
+    def _generate_via_openclaw_agent() -> dict:
+        agent_id = os.getenv("OPENCLAW_AGENT_ID", "loki").strip() or "loki"
+        timeout_seconds = max(LLM_CALL_TIMEOUT_SECONDS + 60, 180)
+        proc = subprocess.run(
+            [
+                "openclaw",
+                "agent",
+                "--agent", agent_id,
+                "--message", prompt,
+                "--json",
+                "--timeout", str(timeout_seconds),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds + 30,
+            check=False,
+        )
+        if proc.returncode != 0:
+            stderr = (proc.stderr or "").strip()
+            stdout = (proc.stdout or "").strip()
+            raise Exception(f"OpenClaw agent falhou (exit {proc.returncode}): {stderr or stdout[:600]}")
+
+        data = json.loads((proc.stdout or "").strip() or "{}")
+        payloads = (((data.get("result") or {}).get("payloads")) or [])
+        text = ""
+        for item in payloads:
+            if isinstance(item, dict) and isinstance(item.get("text"), str) and item.get("text").strip():
+                text = item["text"]
+                break
+        if not text:
+            raise Exception("OpenClaw agent retornou sem payload textual")
+        return _safe_json_extract(text)
+
+    if OPENAI_API_KEY:
+        for attempt in range(max_attempts):
+            try:
+                resp = requests.post(
+                    f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {OPENAI_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": OPENAI_MODEL,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "Você é um gerador de roteiro JSON estrito. Responda apenas JSON válido sem markdown."
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt,
+                            },
+                        ],
+                        "temperature": 0.6,
+                        "max_completion_tokens": max_tokens,
+                        "response_format": {"type": "json_object"},
+                    },
+                    timeout=LLM_CALL_TIMEOUT_SECONDS,
+                )
+
+                if resp.status_code >= 400:
+                    raise Exception(f"HTTP {resp.status_code}: {resp.text[:400]}")
+
+                data = resp.json()
+                text = ((data.get('choices') or [{}])[0].get('message') or {}).get('content') or ''
+                raw = _safe_json_extract(text)
+                if validation_mode == "relaxed":
+                    return _finalize_plan(raw, allow_relaxed_script=True, allow_plan_fallback=True)
+
+                try:
+                    return _finalize_plan(raw)
+                except Exception as strict_error:
+                    print(f"[AutoGenerate] LLM retornou JSON mas falhou na validação estrita: {strict_error}")
+                    if validation_mode == "strict":
+                        raise
+                    return _finalize_plan(raw, allow_relaxed_script=True, allow_plan_fallback=True)
+            except Exception as e:
+                last_error = e
+                if attempt < max_attempts - 1:
+                    backoff_seconds = 2 ** attempt
+                    print(f"[AutoGenerate] LLM tentativa {attempt + 1}/{max_attempts} falhou: {e}. Retry em {backoff_seconds}s.")
+                    time.sleep(backoff_seconds)
+                    continue
+                print(f"[AutoGenerate] OpenAI indisponível, tentando fallback OpenClaw agent: {e}")
+                break
+
+    try:
+        raw = _generate_via_openclaw_agent()
+        if validation_mode == "relaxed":
+            return _finalize_plan(raw, allow_relaxed_script=True, allow_plan_fallback=True)
+        try:
+            return _finalize_plan(raw)
+        except Exception as strict_error:
+            print(f"[AutoGenerate] OpenClaw strict falhou, tentando modo relaxado: {strict_error}")
+            if validation_mode == "strict":
+                raise
+            return _finalize_plan(raw, allow_relaxed_script=True, allow_plan_fallback=True)
+    except Exception as openclaw_error:
+        print(f"[AutoGenerate] OpenClaw indisponível, usando fallback de roteiro local: {openclaw_error}")
+        try:
+            fallback = _build_fallback_scene_plan(
+                brief,
+                long_form=not short_form,
+                target_duration_sec=target_duration_sec,
+            )
+            return _finalize_plan(fallback, allow_relaxed_script=True, allow_plan_fallback=True)
+        except Exception as fallback_error:
+            detail = f"Falha no LLM OpenAI/OpenClaw: openai={last_error}; openclaw={openclaw_error}; fallback={fallback_error}"
+            raise HTTPException(status_code=502, detail=detail) from fallback_error
 
 
 def _remaining_seconds(deadline: float) -> float:
@@ -1195,21 +1943,28 @@ def _resplit_scenes_by_audio_duration(scenes: List[Scene], audio_duration: float
     props_list = catalog.get('props') or []
     
     new_scenes = []
+    target_beats = _build_target_beats(num_scenes, short_form=audio_duration < 90)
     for i in range(num_scenes):
         start = i * chunk_size
         end = len(words) if i == num_scenes - 1 else min(len(words), (i + 1) * chunk_size)
         chunk = " ".join(words[start:end])
+        beat = target_beats[i] if i < len(target_beats) else "proof"
+        defaults = _scene_defaults_for_beat(beat, catalog)
         
         new_scenes.append(Scene(
             id=i + 1,
-            texto_narracao=chunk,
+            texto_narracao=_normalize_scene_text(chunk),
             prompt_visual=None,
             duracao_estimada=target_sec_per_scene,
             tipo_transicao='cut',
-            template=templates[i % len(templates)],
-            avatar_pose=poses[i % len(poses)],
-            props=[props_list[i % len(props_list)]] if props_list else [],
-            motion=None,
+            template=defaults.get('template') or templates[i % len(templates)],
+            avatar_pose=defaults.get('avatar_pose') or poses[i % len(poses)],
+            props=list(defaults.get('props') or ([props_list[i % len(props_list)]] if props_list else [])),
+            motion=defaults.get('motion'),
+            beat=beat,
+            caption_line=_derive_caption_line(chunk),
+            pose_family=defaults.get('pose_family') or beat,
+            prop_family=defaults.get('prop_family') or beat,
         ))
     
     return new_scenes
@@ -1291,6 +2046,157 @@ def validate_audio_quality(audio_path: str, min_duration_sec: float = 30.0) -> t
         return (False, f"Erro ao validar áudio: {str(e)}")
 
 
+def _ffmpeg_run(args: list[str], timeout: int = 180) -> None:
+    proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
+    if proc.returncode != 0:
+        raise Exception((proc.stderr or proc.stdout or "ffmpeg error")[:1200])
+
+
+def _ffmpeg_run_capture(args: list[str], timeout: int = 180) -> str:
+    proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout, check=False)
+    if proc.returncode != 0:
+        raise Exception((proc.stderr or proc.stdout or "ffmpeg error")[:1200])
+    return f"{proc.stdout or ''}\n{proc.stderr or ''}"
+
+
+def _voice_cleanup_filter(settings: dict) -> str:
+    hum_cut = int(settings["voice_hum_cut_hz"])
+    lowpass = int(settings["voice_lowpass_hz"])
+    denoise_floor = float(settings["voice_denoise_floor_db"])
+    compressor_threshold = float(settings["voice_compressor_threshold"])
+    compressor_ratio = float(settings["voice_compressor_ratio"])
+    return (
+        f"highpass=f={hum_cut},"
+        f"lowpass=f={lowpass},"
+        f"afftdn=nf={denoise_floor}:tn=1,"
+        "dynaudnorm=f=150:g=13:p=0.9:m=10:s=10,"
+        f"acompressor=threshold={compressor_threshold}:ratio={compressor_ratio}:attack=6:release=90:makeup=2,"
+        "aresample=48000"
+    )
+
+
+def _measure_voice_loudnorm(audio_path: str, settings: dict) -> dict | None:
+    target_lufs = settings["target_lufs"]
+    target_lra = settings["target_lra"]
+    filter_chain = (
+        f"{_voice_cleanup_filter(settings)},"
+        f"loudnorm=I={target_lufs}:TP=-2.0:LRA={target_lra}:print_format=json"
+    )
+    output = _ffmpeg_run_capture(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            audio_path,
+            "-vn",
+            "-af",
+            filter_chain,
+            "-f",
+            "null",
+            "-",
+        ],
+        timeout=240,
+    )
+    match = re.search(r"\{\s*\"input_i\".*?\}", output, re.S)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(0))
+    except Exception:
+        return None
+
+
+def _master_voice_audio(audio_path: str) -> str:
+    output_path = os.path.join(TEMP_DIR, f"voice_master_{int(time.time()*1000)}.m4a")
+    settings = get_audio_mix_settings()
+    target_lufs = settings["target_lufs"]
+    target_lra = settings["target_lra"]
+    cleanup_filter = _voice_cleanup_filter(settings)
+    measured = _measure_voice_loudnorm(audio_path, settings)
+    if measured:
+        loudnorm_filter = (
+            f"loudnorm=I={target_lufs}:TP=-2.0:LRA={target_lra}:"
+            f"measured_I={measured['input_i']}:"
+            f"measured_LRA={measured['input_lra']}:"
+            f"measured_TP={measured['input_tp']}:"
+            f"measured_thresh={measured['input_thresh']}:"
+            f"offset={measured['target_offset']}:linear=true:print_format=summary"
+        )
+    else:
+        loudnorm_filter = f"loudnorm=I={target_lufs}:TP=-2.0:LRA={target_lra}"
+
+    _ffmpeg_run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            audio_path,
+            "-vn",
+            "-af",
+            f"{cleanup_filter},{loudnorm_filter},alimiter=limit=-2.0dB,volume=-1.2dB",
+            "-c:a",
+            "aac",
+            "-b:a", "160k",
+            "-ar", "48000",
+            "-ac", "1",
+            output_path,
+        ],
+        timeout=240,
+    )
+    return output_path
+
+
+def _mix_background_music(voice_audio_path: str, total_duration: float, context_text: str = "") -> str:
+    settings = get_audio_mix_settings()
+    bg_path = _resolve_background_music_path(context_text)
+    if not bg_path or not os.path.exists(bg_path):
+        return voice_audio_path
+
+    output_path = os.path.join(TEMP_DIR, f"mix_master_{int(time.time()*1000)}.m4a")
+    gain_linear = round(10 ** (float(settings["background_music_gain_db"]) / 20.0), 4)
+    threshold = settings["ducking_threshold"]
+    ratio = settings["ducking_ratio"]
+    fade_out_start = max(0.0, float(total_duration) - 2.0)
+    filter_complex = (
+        f"[1:a]atrim=0:{float(total_duration):.3f},"
+        "aresample=48000,highpass=f=40,lowpass=f=7000,"
+        "loudnorm=I=-30:TP=-2.0:LRA=9,"
+        f"volume={gain_linear},"
+        f"afade=t=in:st=0:d=1.5,afade=t=out:st={fade_out_start:.3f}:d=2[bg];"
+        f"[bg][0:a]sidechaincompress=threshold={threshold}:ratio={ratio}:attack=15:release=250[ducked];"
+        f"[0:a][ducked]amix=inputs=2:weights=1 1:normalize=0[aout]"
+    )
+    _ffmpeg_run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            voice_audio_path,
+            "-stream_loop",
+            "-1",
+            "-i",
+            bg_path,
+            "-filter_complex",
+            filter_complex,
+            "-map",
+            "[aout]",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-shortest",
+            output_path,
+        ],
+        timeout=300,
+    )
+    return output_path
+
+
+def _postprocess_audio_for_video(audio_path: str, total_duration: float, context_text: str = "") -> str:
+    mastered = _master_voice_audio(audio_path)
+    return _mix_background_music(mastered, total_duration, context_text=context_text)
+
+
 async def service_generate_audio(scenes: List[Scene], voice_alias: str):
     """
     Gera áudio usando Gemini TTS (áudio natural) com fallback para Edge TTS.
@@ -1304,19 +2210,12 @@ async def service_generate_audio(scenes: List[Scene], voice_alias: str):
     
     print(f"[Orchestrator] Gerando áudio com Gemini TTS ({len(scenes)} cenas)...")
     
-    # Concatenar todas as narrações das cenas
-    narrations = []
-    for scene in scenes:
-        narration = scene.get_narration
-        if narration:
-            narrations.append(narration)
-    
-    full_script = " ".join(narrations)
+    full_script = _build_tts_script(scenes)
     
     if not full_script.strip():
         raise Exception("Nenhum texto de narração encontrado nas cenas.")
     
-    print(f"  📝 Script: {len(full_script)} caracteres, {len(narrations)} cenas")
+    print(f"  📝 Script: {len(full_script)} caracteres, {len(scenes)} cenas")
     
     # Vozes do Gemini TTS
     voice_map = {
@@ -1386,8 +2285,7 @@ async def service_generate_audio(scenes: List[Scene], voice_alias: str):
 
 async def service_generate_audio_edge_fallback(scenes: List[Scene], voice_alias: str):
     """Fallback: Gera áudio usando Edge TTS."""
-    # Concatenar narrações
-    full_script = " ".join([s.get_narration for s in scenes if s.get_narration])
+    full_script = _build_tts_script(scenes)
     
     voice_map = {
         # Preferências Edge (PT-BR)
@@ -1941,10 +2839,12 @@ def _render_layer_scene_to_png(scene: Scene, out_path: str, size=(1280, 720)) ->
 async def service_generate_layer_images(scenes: List[Scene]):
     """Gera um PNG por cena usando o motor de layers (assets locais)."""
     print(f"[Orchestrator] Gerando {len(scenes)} cenas em modo layers (assets locais)...")
+    render_cfg = get_render_settings()
+    size = (render_cfg["width"], render_cfg["height"])
     out_paths = []
     for scene in scenes:
         out_path = os.path.join(TEMP_DIR, f"layer_scene_{int(time.time()*1000)}_{scene.id}.png")
-        _render_layer_scene_to_png(scene, out_path)
+        _render_layer_scene_to_png(scene, out_path, size=size)
         out_paths.append(out_path)
     return out_paths
 
@@ -1957,15 +2857,65 @@ def _clean_caption_text(text: str) -> str:
 
 def _caption_for_scene(scene: Scene, max_chars: int = 54) -> str:
     """CapCut-ish: 1 linha, curta, pegando o melhor pedaço da fala da cena."""
-    raw = _clean_caption_text(scene.get_narration if scene else "")
+    raw = _clean_caption_text((scene.caption_line if scene else "") or (scene.get_narration if scene else ""))
     if not raw:
         return ""
-    # prioriza 1ª frase
-    first = re.split(r"(?<=[\.!\?])\s+", raw, maxsplit=1)[0]
-    first = first.strip()
+    first = re.split(r"(?<=[\.!\?])\s+", raw, maxsplit=1)[0].strip()
     if len(first) > max_chars:
         first = first[: max_chars - 1].rstrip() + "…"
     return first
+
+
+def _format_srt_timestamp(seconds: float) -> str:
+    millis = max(0, int(round(seconds * 1000)))
+    hours, rem = divmod(millis, 3_600_000)
+    minutes, rem = divmod(rem, 60_000)
+    secs, ms = divmod(rem, 1000)
+    return f"{hours:02}:{minutes:02}:{secs:02},{ms:03}"
+
+
+def _build_scene_timeline(scenes: List[Scene], total_audio_duration: float) -> list[dict]:
+    if not scenes:
+        return []
+    total_scene_duration = sum(scene.get_duration for scene in scenes) or float(len(scenes))
+    scale_factor = total_audio_duration / total_scene_duration if total_scene_duration > 0 else 1.0
+    timeline = []
+    cursor = 0.0
+    for idx, scene in enumerate(scenes, start=1):
+        duration = max(0.5, float(scene.get_duration) * scale_factor)
+        start = cursor
+        end = min(total_audio_duration, start + duration)
+        if idx == len(scenes):
+            end = total_audio_duration
+        timeline.append(
+            {
+                "index": idx,
+                "start": max(0.0, start),
+                "end": max(start + 0.2, end),
+                "caption": _caption_for_scene(scene),
+            }
+        )
+        cursor = end
+    return timeline
+
+
+def _write_srt(entries: list[dict], out_path: str) -> str:
+    lines = []
+    for entry in entries:
+        caption = _clean_caption_text(entry.get("caption") or "")
+        if not caption:
+            continue
+        lines.extend(
+            [
+                str(entry["index"]),
+                f"{_format_srt_timestamp(entry['start'])} --> {_format_srt_timestamp(entry['end'])}",
+                caption,
+                "",
+            ]
+        )
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines).strip() + "\n")
+    return out_path
 
 
 def _render_caption_png(text: str, out_path: str, size=(1280, 720)) -> str:
@@ -2021,7 +2971,7 @@ def _render_caption_png(text: str, out_path: str, size=(1280, 720)) -> str:
     return out_path
 
 
-async def service_render_video(image_paths: List[str], audio_path: str, scenes: List[Scene]):
+async def service_render_video(image_paths: List[str], audio_path: str, scenes: List[Scene], static_base_url: str | None = None):
     """
     Compõe imagens e áudio usando MoviePy com suporte a:
     - Transições (zoom_in, zoom_out, crossfade, cut)
@@ -2032,8 +2982,21 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
     if not audio_path or not os.path.exists(audio_path):
         raise Exception("Arquivo de áudio não encontrado.")
 
+    render_cfg = get_render_settings()
+    width = render_cfg["width"]
+    height = render_cfg["height"]
+
     # Carregar áudio para saber a duração total
-    audio_clip = AudioFileClip(audio_path)
+    source_audio_clip = AudioFileClip(audio_path)
+    total_audio_duration = source_audio_clip.duration
+    source_audio_clip.close()
+
+    final_audio_path = _postprocess_audio_for_video(
+        audio_path,
+        total_audio_duration,
+        context_text=_build_audio_context(scenes),
+    )
+    audio_clip = AudioFileClip(final_audio_path)
     total_audio_duration = audio_clip.duration
     
     # Filtrar imagens válidas e parear com cenas
@@ -2046,18 +3009,18 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
     if not valid_pairs:
         raise Exception("Nenhuma imagem válida gerada.")
     
-    # Calcular durações
-    total_scene_duration = sum(s.get_duration for _, s in valid_pairs if s)
-    
-    # Se a soma das durações for diferente do áudio, escalar proporcionalmente
-    scale_factor = total_audio_duration / total_scene_duration if total_scene_duration > 0 else 1
+    paired_scenes = [scene for _, scene in valid_pairs if scene]
+    timeline = _build_scene_timeline(paired_scenes, total_audio_duration)
     
     clips = []
     current_time = 0
     
     for i, (img_path, scene) in enumerate(valid_pairs):
-        # Duração da cena (escalada para sincronizar com áudio)
-        scene_duration = (scene.get_duration * scale_factor) if scene else (total_audio_duration / len(valid_pairs))
+        # Duração da cena sincronizada com áudio
+        if scene and i < len(timeline):
+            scene_duration = timeline[i]["end"] - timeline[i]["start"]
+        else:
+            scene_duration = total_audio_duration / len(valid_pairs)
         
         # Criar clip base
         clip = ImageClip(img_path).set_duration(scene_duration)
@@ -2065,10 +3028,10 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
         # FIX: Usar resize_to_fill em vez de apenas resize height
         # Isso garante que imagens quadradas/retangulares preencham 16:9 sem barras pretas
         try:
-            clip = resize_to_fill(clip, 1280, 720)
+            clip = resize_to_fill(clip, width, height)
         except Exception as e:
             print(f"Erro no resize_to_fill: {e}, usando resize padrão")
-            clip = clip.resize(height=720)
+            clip = clip.resize(height=height)
             
         clip = clip.set_position("center")
         
@@ -2100,7 +3063,7 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
             caption = _caption_for_scene(scene) if scene else ""
             if caption:
                 cap_path = os.path.join(TEMP_DIR, f"caption_{int(time.time()*1000)}_{i}.png")
-                _render_caption_png(caption, cap_path, size=(1280, 720))
+                _render_caption_png(caption, cap_path, size=(width, height))
                 cap_clip = ImageClip(cap_path).set_duration(scene_duration).set_position((0, 0))
                 clip = CompositeVideoClip([clip, cap_clip])
         except Exception as e:
@@ -2112,28 +3075,47 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
     # Concatenar com método compose para suportar crossfades
     final_video = concatenate_videoclips(clips, method="compose")
     final_video = final_video.set_audio(audio_clip)
-    
+
+    # FIX: libx264 + yuv420p exige dimensões pares (divisíveis por 2)
+    # Garante que width e height são pares para evitar "height not divisible by 2"
+    fw, fh = final_video.size
+    new_fw = fw if fw % 2 == 0 else fw - 1
+    new_fh = fh if fh % 2 == 0 else fh - 1
+    if new_fw != fw or new_fh != fh:
+        print(f"[Orchestrator] FIX: ajustando dimensões {fw}x{fh} → {new_fw}x{new_fh} (par p/ libx264)")
+        final_video = final_video.resize((new_fw, new_fh))
+
     output_filename = f"vsl_final_{int(time.time())}.mp4"
     output_path = os.path.join(STATIC_DIR, output_filename)
+    subtitles_filename = output_filename.rsplit(".", 1)[0] + ".srt"
+    subtitles_path = os.path.join(STATIC_DIR, subtitles_filename)
     
     print(f"[Orchestrator] Renderizando {len(clips)} cenas ({total_audio_duration:.1f}s total)...")
     
     # Renderizar (qualidade ok sem ficar "ultrafast")
     final_video.write_videofile(
         output_path,
-        fps=24,
-        codec="libx264",
-        audio_codec="aac",
+        fps=render_cfg["fps"],
+        codec=render_cfg["codec"],
+        audio_codec=render_cfg["audio_codec"],
         temp_audiofile=os.path.join(TEMP_DIR, "temp-audio.m4a"),
         remove_temp=True,
         logger=None,
-        preset="fast",
-        ffmpeg_params=["-crf", "18", "-pix_fmt", "yuv420p"],
-        threads=4,
+        preset=render_cfg["preset"],
+        ffmpeg_params=["-crf", str(render_cfg["crf"]), "-pix_fmt", "yuv420p"],
+        threads=render_cfg["threads"],
     )
     
     print(f"  ✅ Vídeo renderizado: {output_filename}")
-    return f"{get_static_base_url()}{output_filename}"
+    base_url = (static_base_url or get_static_base_url()).rstrip("/") + "/"
+    if timeline:
+        _write_srt(timeline, subtitles_path)
+        print(f"  ✅ Legenda SRT gerada: {subtitles_filename}")
+    return {
+        "video_url": f"{base_url}{output_filename}",
+        "subtitles_url": f"{base_url}{subtitles_filename}" if os.path.exists(subtitles_path) else None,
+        "subtitles_path": subtitles_path if os.path.exists(subtitles_path) else None,
+    }
 
 @app.get("/config")
 async def get_public_config():
@@ -2161,6 +3143,185 @@ def _persist_run_artifacts(run_id: str, payload: dict, plan: dict, response: dic
     return run_dir
 
 
+def _job_to_status_response(job: dict) -> JobStatusResponse:
+    return JobStatusResponse(
+        job_id=job["id"],
+        job_type=job["job_type"],
+        route_name=job["route_name"],
+        queue_status=job["status"],
+        stage=job["stage"],
+        attempts=int(job.get("attempts") or 0),
+        max_attempts=int(job.get("max_attempts") or 1),
+        worker_id=job.get("worker_id"),
+        error=job.get("error_text"),
+        created_at=job["created_at"],
+        updated_at=job["updated_at"],
+        started_at=job.get("started_at"),
+        finished_at=job.get("finished_at"),
+        progress=job.get("progress") or {},
+        result=job.get("result_payload"),
+    )
+
+
+def _parse_iso_dt(value: str | None):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
+
+
+def _seconds_between(start_value: str | None, end_value: str | None) -> float | None:
+    start_dt = _parse_iso_dt(start_value)
+    end_dt = _parse_iso_dt(end_value)
+    if not start_dt or not end_dt:
+        return None
+    return max(0.0, (end_dt - start_dt).total_seconds())
+
+
+def _dir_stats(path: str) -> dict:
+    total_bytes = 0
+    file_count = 0
+    if os.path.exists(path):
+        for root, _, files in os.walk(path):
+            for filename in files:
+                file_count += 1
+                full_path = os.path.join(root, filename)
+                try:
+                    total_bytes += os.path.getsize(full_path)
+                except OSError:
+                    continue
+    return {"path": path, "files": file_count, "bytes": total_bytes}
+
+
+def _safe_unlink(path: str) -> bool:
+    try:
+        if os.path.isfile(path):
+            os.remove(path)
+            return True
+    except OSError:
+        return False
+    return False
+
+
+def _cleanup_old_files(
+    directory: str,
+    *,
+    older_than_seconds: int,
+    suffixes: tuple[str, ...] | None = None,
+) -> dict:
+    now = time.time()
+    removed_files = 0
+    removed_bytes = 0
+    if older_than_seconds <= 0 or not os.path.exists(directory):
+        return {"path": directory, "removed_files": 0, "removed_bytes": 0}
+
+    for root, _, files in os.walk(directory):
+        for filename in files:
+            if suffixes and not filename.lower().endswith(suffixes):
+                continue
+            full_path = os.path.join(root, filename)
+            try:
+                age = now - os.path.getmtime(full_path)
+                if age < older_than_seconds:
+                    continue
+                size = os.path.getsize(full_path)
+            except OSError:
+                continue
+            if _safe_unlink(full_path):
+                removed_files += 1
+                removed_bytes += size
+    return {"path": directory, "removed_files": removed_files, "removed_bytes": removed_bytes}
+
+
+def _ops_cleanup() -> dict:
+    temp_hours = int(os.getenv("YT_AUTOMATOR_TEMP_RETENTION_HOURS", "12"))
+    runs_days = int(os.getenv("YT_AUTOMATOR_RUNS_RETENTION_DAYS", "14"))
+    static_days = int(os.getenv("YT_AUTOMATOR_STATIC_RETENTION_DAYS", "0"))
+    results = [
+        _cleanup_old_files(
+            TEMP_DIR,
+            older_than_seconds=temp_hours * 3600,
+            suffixes=(".png", ".mp3", ".wav", ".m4a", ".json"),
+        ),
+        _cleanup_old_files(
+            RUNS_DIR,
+            older_than_seconds=runs_days * 86400,
+            suffixes=(".json",),
+        ),
+    ]
+    if static_days > 0:
+        results.append(
+            _cleanup_old_files(
+                STATIC_DIR,
+                older_than_seconds=static_days * 86400,
+                suffixes=(".mp4", ".srt"),
+            )
+        )
+    return {
+        "cleanup": results,
+        "after": {
+            "temp": _dir_stats(TEMP_DIR),
+            "static": _dir_stats(STATIC_DIR),
+            "runs": _dir_stats(RUNS_DIR),
+        },
+    }
+
+
+def _ops_dashboard(limit: int = 100) -> dict:
+    recent_jobs = list_jobs(limit=max(1, min(limit, 500)))
+    completed_jobs = [job for job in recent_jobs if job.get("status") == "completed"]
+    failed_jobs = [job for job in recent_jobs if job.get("status") == "failed"]
+    job_durations = [
+        seconds
+        for job in completed_jobs
+        if (seconds := _seconds_between(job.get("started_at"), job.get("finished_at"))) is not None
+    ]
+    failure_buckets: dict[str, int] = {}
+    for job in failed_jobs[:25]:
+        error = (job.get("error_text") or "unknown").strip().splitlines()[0][:120]
+        failure_buckets[error] = failure_buckets.get(error, 0) + 1
+    recent_view = []
+    for job in recent_jobs[:10]:
+        recent_view.append(
+            {
+                "job_id": job["id"],
+                "route_name": job["route_name"],
+                "status": job["status"],
+                "stage": job["stage"],
+                "created_at": job["created_at"],
+                "started_at": job.get("started_at"),
+                "finished_at": job.get("finished_at"),
+                "elapsed_seconds": _seconds_between(job.get("started_at"), job.get("finished_at")),
+                "error": (job.get("error_text") or "")[:160] or None,
+            }
+        )
+    return {
+        "queue": queue_stats(),
+        "storage": {
+            "temp": _dir_stats(TEMP_DIR),
+            "static": _dir_stats(STATIC_DIR),
+            "runs": _dir_stats(RUNS_DIR),
+        },
+        "recent_jobs": recent_view,
+        "performance": {
+            "sample_size": len(completed_jobs),
+            "completed_elapsed_min": round(min(job_durations), 2) if job_durations else None,
+            "completed_elapsed_avg": round(sum(job_durations) / len(job_durations), 2) if job_durations else None,
+            "completed_elapsed_max": round(max(job_durations), 2) if job_durations else None,
+        },
+        "failures": {
+            "sample_size": len(failed_jobs),
+            "top_errors": sorted(
+                ({"error": error, "count": count} for error, count in failure_buckets.items()),
+                key=lambda item: item["count"],
+                reverse=True,
+            )[:10],
+        },
+    }
+
+
 def _video_path_from_url(video_url: str) -> str:
     filename = (video_url or "").split("/static/")[-1].strip()
     return os.path.join(STATIC_DIR, filename)
@@ -2185,7 +3346,39 @@ def _probe_duration_seconds(path: str) -> float:
         return 0.0
 
 
-def _validate_video_quality(video_url: str, min_seconds: float = 30.0, min_bytes: int = 150_000):
+def _probe_video_stream_info(path: str) -> dict:
+    try:
+        proc = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height",
+                "-of",
+                "json",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return {"width": 0, "height": 0}
+        data = json.loads((proc.stdout or "").strip() or "{}")
+        stream = ((data.get("streams") or [{}])[0]) if isinstance(data, dict) else {}
+        return {
+            "width": int(stream.get("width") or 0),
+            "height": int(stream.get("height") or 0),
+        }
+    except Exception:
+        return {"width": 0, "height": 0}
+
+
+def _validate_video_quality(video_url: str, min_seconds: float = 30.0, min_bytes: int = 150_000, min_width: int = 1280, min_height: int = 720):
     video_path = _video_path_from_url(video_url)
     if not os.path.exists(video_path):
         raise Exception("Quality gate: arquivo de vídeo não encontrado")
@@ -2195,7 +3388,18 @@ def _validate_video_quality(video_url: str, min_seconds: float = 30.0, min_bytes
     duration = _probe_duration_seconds(video_path)
     if duration < min_seconds:
         raise Exception(f"Quality gate: duração muito curta ({duration:.1f}s < {min_seconds:.1f}s)")
-    return {"video_path": video_path, "bytes": size, "duration": round(duration, 2)}
+    stream_info = _probe_video_stream_info(video_path)
+    if stream_info["width"] < min_width or stream_info["height"] < min_height:
+        raise Exception(
+            f"Quality gate: resolução abaixo do mínimo ({stream_info['width']}x{stream_info['height']} < {min_width}x{min_height})"
+        )
+    return {
+        "video_path": video_path,
+        "bytes": size,
+        "duration": round(duration, 2),
+        "width": stream_info["width"],
+        "height": stream_info["height"],
+    }
 
 
 def _send_telegram_alert(text: str):
@@ -2231,15 +3435,27 @@ def _notify_mission_control(
         "run_id": run_id,
         "quality_status": quality_status,
     }
-    endpoints = [
-        "http://100.99.151.85:3000/api/video-event",
-        "http://localhost:3000/api/video-event",
-    ]
+    raw_endpoints = os.getenv("MISSION_CONTROL_ENDPOINTS", "").strip()
+    legacy_endpoint = os.getenv("MISSION_CONTROL_NOTIFY_URL", "").strip()
+    allow_local_fallback = os.getenv("MISSION_CONTROL_ALLOW_LOCAL_FALLBACK", "true").strip().lower() not in {"0", "false", "no"}
+
+    if raw_endpoints:
+        endpoints = [item.strip() for item in raw_endpoints.split(",") if item.strip()]
+    elif legacy_endpoint:
+        endpoints = [legacy_endpoint]
+        if allow_local_fallback:
+            endpoints.append("http://localhost:3000/api/video-event")
+    else:
+        endpoints = [
+            "http://100.99.151.85:3000/api/video-event",
+            "http://localhost:3000/api/video-event",
+        ]
     last_error = None
     for idx, endpoint in enumerate(endpoints):
         try:
             resp = requests.post(endpoint, json=payload, timeout=5)
             if resp.status_code < 400:
+                print(f"[Run {run_id}] Mission Control notify ok via {endpoint} ({resp.status_code})")
                 return
             last_error = f"HTTP {resp.status_code}: {resp.text[:300]}"
             print(f"[Run {run_id}] Mission Control notify failed via {endpoint}: {last_error}")
@@ -2252,13 +3468,22 @@ def _notify_mission_control(
         print(f"[Run {run_id}] Mission Control notify failed after fallback: {last_error}")
 
 
-@app.post('/auto-generate', response_model=AutoGenerateResponse)
-async def auto_generate(payload: AutoGenerateRequest):
+async def _run_auto_generate(
+    payload: AutoGenerateRequest,
+    request: Request | None,
+    route_name: str = "/auto-generate",
+    stage_callback: Optional[Callable[[str, dict[str, Any]], None]] = None,
+):
     # 1-click flow: brief -> Nick BR plan (JSON) -> render via internal pipeline (layers + Antonio)
     run_id = _new_run_id()
     started = time.time()
     deadline = started + AUTO_GENERATE_MAX_SECONDS
-    print(f"[Run {run_id}] /auto-generate iniciado")
+    print(f"[Run {run_id}] {route_name} iniciado")
+
+    def push_stage(stage: str, **progress_updates):
+        if stage_callback:
+            stage_callback(stage, progress_updates)
+
     try:
         brief = (payload.brief or payload.tema or '').strip()
         if len(brief) < 10:
@@ -2267,9 +3492,36 @@ async def auto_generate(payload: AutoGenerateRequest):
         # Force constraints: no image-gen API calls
         mode = 'layers'
         voice_id = payload.voice_id or 'Antonio'
+        test_mode = bool(payload.test_mode)
+        validation_mode = _normalize_validation_mode(payload.validation_mode, test_mode=test_mode)
+        target_duration_sec = payload.target_duration_sec
+        if target_duration_sec is None:
+            target_duration_sec = TEST_MODE_DEFAULT_DURATION_SEC if test_mode else 480.0
+        if test_mode:
+            target_duration_sec = max(TEST_MODE_MIN_DURATION_SEC, min(TEST_MODE_MAX_DURATION_SEC, float(target_duration_sec)))
+        else:
+            target_duration_sec = max(120.0, float(target_duration_sec))
+
+        push_stage(
+            "llm",
+            route_name=route_name,
+            test_mode=test_mode,
+            validation_mode=validation_mode,
+            target_duration_sec=target_duration_sec,
+            llm_ok=False,
+            script_ok=False,
+            audio_ok=False,
+            render_ok=False,
+        )
 
         plan = await _wait_with_deadline(
-            asyncio.to_thread(_llm_generate_scene_plan, brief),
+            asyncio.to_thread(
+                _llm_generate_scene_plan,
+                brief,
+                test_mode,
+                target_duration_sec,
+                validation_mode,
+            ),
             operation="Geração de roteiro LLM",
             deadline=deadline,
             cap_seconds=(LLM_CALL_TIMEOUT_SECONDS * (LLM_MAX_RETRIES + 1)) + 10,
@@ -2279,21 +3531,40 @@ async def auto_generate(payload: AutoGenerateRequest):
         if not scenes_objs:
             raise Exception("Plano de cenas vazio após LLM.")
 
+        push_stage(
+            "script_ready",
+            llm_ok=True,
+            script_ok=True,
+            scene_count=len(scenes_objs),
+            title=plan.get("title"),
+        )
+
         # Pré-check de áudio para erro precoce sem iniciar render pesado.
+        push_stage("audio", llm_ok=True, script_ok=True, audio_ok=False, scene_count=len(scenes_objs))
         test_audio = await _wait_with_deadline(
             service_generate_audio(scenes_objs, voice_id),
             operation="Pré-check de áudio",
             deadline=deadline,
             cap_seconds=300,
         )
-        is_valid, actual_duration = _ensure_minimum_audio_duration(test_audio, min_sec=480.0)
+        is_valid, actual_duration = _ensure_minimum_audio_duration(test_audio, min_sec=target_duration_sec)
 
         # Reescalar cenas baseado na duração real do áudio: roteiro/5 = cenas
-        if is_valid and actual_duration > 60:
+        if is_valid and actual_duration > (20.0 if test_mode else 60.0):
             scenes_objs = _resplit_scenes_by_audio_duration(scenes_objs, actual_duration, target_sec_per_scene=5.0)
             # Atualizar o script no plan com a concatenação das novas cenas
             plan['scenes'] = [s.model_dump() for s in scenes_objs]
             plan['script'] = " ".join(s.get_narration or "" for s in scenes_objs)
+
+        push_stage(
+            "render",
+            llm_ok=True,
+            script_ok=True,
+            audio_ok=is_valid,
+            audio_duration_sec=round(actual_duration, 1),
+            scene_count=len(scenes_objs),
+            render_ok=False,
+        )
 
         video_req = VideoGenerationRequest(
             script=plan.get('script', ''),
@@ -2307,7 +3578,7 @@ async def auto_generate(payload: AutoGenerateRequest):
         )
 
         video_resp = await _wait_with_deadline(
-            generate_video(video_req),
+            generate_video(video_req, request=request),
             operation="Renderização de vídeo",
             deadline=deadline,
             cap_seconds=520,
@@ -2317,25 +3588,51 @@ async def auto_generate(payload: AutoGenerateRequest):
 
         message = 'Auto-generate concluído.'
         if not is_valid:
-            message = f'Auto-generate concluído com duração de {actual_duration:.1f}s (abaixo do alvo de 8min).'
+            label = f"{int(target_duration_sec)}s" if test_mode else "8min"
+            message = f'Auto-generate concluído com duração de {actual_duration:.1f}s (abaixo do alvo de {label}).'
+        elif test_mode:
+            message = f'Auto-generate TEST MODE concluído com duração de {actual_duration:.1f}s.'
 
         elapsed = time.time() - started
-        print(f"[Run {run_id}] /auto-generate concluído em {elapsed:.1f}s")
+        print(f"[Run {run_id}] {route_name} concluído em {elapsed:.1f}s")
         response_payload = {
             "status": "completed",
             "title": plan['title'],
             "description": plan['description'],
             "scene_plan": plan,
             "video_url": video_resp.video_url,
+            "subtitles_url": video_resp.subtitles_url,
             "message": f"{message} | run_id={run_id}",
+            "job_id": None,
+            "elapsed_seconds": round(elapsed, 2),
         }
         run_dir = _persist_run_artifacts(
             run_id,
-            {"brief": payload.brief, "tema": payload.tema, "voice_id": voice_id, "mode": mode},
+            {
+                "brief": payload.brief,
+                "tema": payload.tema,
+                "voice_id": voice_id,
+                "mode": mode,
+                "test_mode": test_mode,
+                "target_duration_sec": target_duration_sec,
+                "validation_mode": validation_mode,
+            },
             plan,
             response_payload,
         )
+        response_payload["run_dir"] = run_dir
         response_payload["message"] += f" | run_dir={run_dir}"
+        push_stage(
+            "completed",
+            llm_ok=True,
+            script_ok=True,
+            audio_ok=is_valid,
+            render_ok=True,
+            run_id=run_id,
+            run_dir=run_dir,
+            video_url=video_resp.video_url,
+            subtitles_url=video_resp.subtitles_url,
+        )
         _send_telegram_alert(
             f"✅ yt-automator concluído\nrun_id={run_id}\nvideo={response_payload.get('video_url')}"
         )
@@ -2345,19 +3642,121 @@ async def auto_generate(payload: AutoGenerateRequest):
         raise e
     except TimeoutError as e:
         elapsed = time.time() - started
-        print(f"[Run {run_id}] /auto-generate timeout após {elapsed:.1f}s: {e}")
+        print(f"[Run {run_id}] {route_name} timeout após {elapsed:.1f}s: {e}")
+        push_stage("failed", error=str(e), timeout=True)
         _send_telegram_alert(f"❌ yt-automator timeout\nrun_id={run_id}\nerro={str(e)[:800]}")
-        return AutoGenerateResponse(status='error', message=f"run_id={run_id} | timeout | {str(e)}")
+        return AutoGenerateResponse(
+            status='error',
+            message=f"run_id={run_id} | timeout | {str(e)}",
+            elapsed_seconds=round(elapsed, 2),
+        )
     except Exception as e:
         import traceback
         traceback.print_exc()
         elapsed = time.time() - started
-        print(f"[Run {run_id}] /auto-generate erro após {elapsed:.1f}s: {e}")
+        print(f"[Run {run_id}] {route_name} erro após {elapsed:.1f}s: {e}")
+        push_stage("failed", error=str(e))
         _send_telegram_alert(f"❌ yt-automator falhou\nrun_id={run_id}\nerro={str(e)[:800]}")
-        return AutoGenerateResponse(status='error', message=f"run_id={run_id} | {str(e)}")
+        return AutoGenerateResponse(
+            status='error',
+            message=f"run_id={run_id} | {str(e)}",
+            elapsed_seconds=round(elapsed, 2),
+        )
+
+
+def _enqueue_auto_generate_job(payload: AutoGenerateRequest, route_name: str) -> JobSubmitResponse:
+    brief = (payload.brief or payload.tema or "").strip()
+    if len(brief) < 10:
+        raise HTTPException(status_code=400, detail='brief/tema muito curto. Explique o tema, promessa e público-alvo (>=10 chars).')
+
+    job = enqueue_job(
+        "auto_generate",
+        route_name,
+        payload.model_dump(),
+        max_attempts=1,
+    )
+    return JobSubmitResponse(
+        status="accepted",
+        job_id=job["id"],
+        queue_status=job["status"],
+        route_name=route_name,
+        message=f"Job enfileirado. Consulte /jobs/{job['id']}",
+    )
+
+
+@app.post('/auto-generate', response_model=JobSubmitResponse)
+async def auto_generate(payload: AutoGenerateRequest, request: Request):
+    return _enqueue_auto_generate_job(payload, route_name="/auto-generate")
+
+
+@app.post('/auto-generate/smoke', response_model=JobSubmitResponse)
+async def auto_generate_smoke(payload: AutoGenerateRequest, request: Request):
+    smoke_payload = payload.model_copy(
+        update={
+            "test_mode": True,
+            "target_duration_sec": payload.target_duration_sec or TEST_MODE_DEFAULT_DURATION_SEC,
+            "validation_mode": payload.validation_mode or "relaxed",
+            "mode": "layers",
+        }
+    )
+    return _enqueue_auto_generate_job(smoke_payload, route_name="/auto-generate/smoke")
+
+
+@app.post('/auto-generate/smoke-batch', response_model=list[JobSubmitResponse])
+async def auto_generate_smoke_batch(payload: SmokeBatchRequest, request: Request):
+    count = max(1, min(int(payload.count), 20))
+    smoke_payload = payload.model_copy(
+        update={
+            "test_mode": True,
+            "target_duration_sec": payload.target_duration_sec or TEST_MODE_DEFAULT_DURATION_SEC,
+            "validation_mode": payload.validation_mode or "relaxed",
+            "mode": "layers",
+        }
+    )
+    normalized_payload = AutoGenerateRequest(**smoke_payload.model_dump())
+    responses = []
+    for _ in range(count):
+        responses.append(_enqueue_auto_generate_job(normalized_payload, route_name="/auto-generate/smoke-batch"))
+    return responses
+
+
+@app.get("/jobs", response_model=list[JobStatusResponse])
+async def jobs_index(limit: int = 20):
+    return [_job_to_status_response(job) for job in list_jobs(limit=limit)]
+
+
+@app.get("/jobs/{job_id}", response_model=JobStatusResponse)
+async def job_status(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="job not found")
+    return _job_to_status_response(job)
+
+
+@app.get("/jobs/{job_id}/result")
+async def job_result(job_id: str):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="job not found")
+    return {
+        "job_id": job["id"],
+        "queue_status": job["status"],
+        "result": job.get("result_payload"),
+        "error": job.get("error_text"),
+    }
+
+
+@app.get("/ops/dashboard")
+async def ops_dashboard(limit: int = 100):
+    return _ops_dashboard(limit=limit)
+
+
+@app.post("/ops/cleanup")
+async def ops_cleanup():
+    return _ops_cleanup()
 
 @app.post("/generate-video", response_model=VideoResponse)
-async def generate_video(payload: VideoGenerationRequest):
+async def generate_video(payload: VideoGenerationRequest, request: Request):
     run_id = _new_run_id()
     started = time.time()
     print(f"[Run {run_id}] /generate-video iniciado")
@@ -2467,16 +3866,25 @@ async def generate_video(payload: VideoGenerationRequest):
         # 7. Renderizar Vídeo (retry curto)
         last_render_error = None
         video_url = None
+        subtitles_url = None
         is_layers = (payload.mode or "images").lower() == "layers"
         min_bytes_quality = 100_000 if is_layers else 150_000
         min_seconds_quality = 3.0 if (is_layers and len(scenes_to_process) <= 3) else 8.0
+        render_cfg = get_render_settings()
         
         for render_attempt in range(2):
             try:
-                video_url = await asyncio.wait_for(
-                    service_render_video(image_paths, audio_path, scenes_to_process),
+                render_result = await asyncio.wait_for(
+                    service_render_video(
+                        image_paths,
+                        audio_path,
+                        scenes_to_process,
+                        static_base_url=get_public_static_base_url(request),
+                    ),
                     timeout=900,
                 )
+                video_url = render_result.get("video_url")
+                subtitles_url = render_result.get("subtitles_url")
                 # Pular quality gate para vídeos remotos (sem acesso local ao arquivo).
                 is_local = video_url and ("localhost" in video_url or "127.0.0.1" in video_url)
                 skip_this = not is_local
@@ -2484,7 +3892,13 @@ async def generate_video(payload: VideoGenerationRequest):
                 if skip_this:
                     print(f"[Run {run_id}] Pulando quality gate")
                 else:
-                    quality = _validate_video_quality(video_url, min_seconds=min_seconds_quality, min_bytes=min_bytes_quality)
+                    quality = _validate_video_quality(
+                        video_url,
+                        min_seconds=min_seconds_quality,
+                        min_bytes=min_bytes_quality,
+                        min_width=render_cfg["width"],
+                        min_height=render_cfg["height"],
+                    )
                     print(f"[Run {run_id}] quality_gate ok: {quality}")
                 break
             except Exception as render_err:
@@ -2513,7 +3927,9 @@ async def generate_video(payload: VideoGenerationRequest):
         return VideoResponse(
             status="completed",
             video_url=video_url,
-            message=f"Vídeo gerado com sucesso! ({len(scenes_to_process)} cenas) | run_id={run_id}"
+            subtitles_url=subtitles_url,
+            message=f"Vídeo gerado com sucesso! ({len(scenes_to_process)} cenas) | run_id={run_id}",
+            elapsed_seconds=round(elapsed, 2),
         )
 
     except Exception as e:
@@ -2523,12 +3939,17 @@ async def generate_video(payload: VideoGenerationRequest):
         print(f"[Run {run_id}] /generate-video erro após {elapsed:.1f}s: {e}")
         return VideoResponse(
             status="error",
-            message=f"Falha na geração (run_id={run_id}): {str(e)}"
+            message=f"Falha na geração (run_id={run_id}): {str(e)}",
+            elapsed_seconds=round(elapsed, 2),
         )
 
 @app.get("/health")
 def health_check():
-    return {"status": "backend_v1_ready", "ai_engine": "seedream_edge_gemini"}
+    return {
+        "status": "backend_v1_ready",
+        "ai_engine": "seedream_edge_gemini",
+        "queue": queue_stats(),
+    }
 
 
 @app.get("/list-videos")
@@ -2560,6 +3981,6 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         app,
-        host=str(get_config("server.host", "0.0.0.0")),
-        port=int(get_config("server.port", 8000)),
+        host=str(os.getenv("SERVER_HOST") or get_config("server.host", "0.0.0.0")),
+        port=int(os.getenv("SERVER_PORT") or get_config("server.port", 8000)),
     )

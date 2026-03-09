@@ -3,3 +3,7 @@
 .env.*
 *.key
 *.pem
+jobs.sqlite3
+jobs.sqlite3-*
+assets/music/tracks/*
+!assets/music/tracks/.gitkeep

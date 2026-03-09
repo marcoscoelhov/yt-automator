@@ -1,0 +1,152 @@
+{
+  "provider": "Pixabay Music",
+  "license": "Pixabay Content License",
+  "license_url": "https://pixabay.com/service/license-summary/",
+  "notes": [
+    "Baixe as trilhas direto do banco de musica gratuito e importe para backend/assets/music/tracks/ com o script backend/scripts/import_free_music.py.",
+    "O motor so escolhe faixas cujo local_path exista no disco.",
+    "Pixabay e simples para uso comercial, mas algumas faixas podem ter Content ID; valide isso antes de publicar em producao."
+  ],
+  "tracks": [
+    {
+      "id": "pixabay-upbeat-motivational-corporate-226171",
+      "title": "Upbeat Motivational Corporate",
+      "provider": "Pixabay Music",
+      "source_page_url": "https://pixabay.com/music/corporate-upbeat-motivational-corporate-226171/",
+      "local_path": "tracks/upbeat-motivational-corporate-226171.mp3",
+      "moods": [
+        "corporate",
+        "uplifting",
+        "hopeful",
+        "focused"
+      ],
+      "themes": [
+        "finance",
+        "business",
+        "education",
+        "productivity",
+        "marketing"
+      ],
+      "tags": [
+        "corporate",
+        "motivational",
+        "clean",
+        "modern"
+      ],
+      "energy": "medium",
+      "content_id_registered": false
+    },
+    {
+      "id": "pixabay-inspiring-background-corporate-160676",
+      "title": "Inspiring Background Corporate",
+      "provider": "Pixabay Music",
+      "source_page_url": "https://pixabay.com/music/corporate-inspiring-background-corporate-160676/",
+      "local_path": "tracks/inspiring-background-corporate-160676.mp3",
+      "moods": [
+        "corporate",
+        "calm",
+        "focused",
+        "hopeful"
+      ],
+      "themes": [
+        "finance",
+        "stability",
+        "planning",
+        "business",
+        "explainer"
+      ],
+      "tags": [
+        "ambient",
+        "light",
+        "clean",
+        "supportive"
+      ],
+      "energy": "low",
+      "content_id_registered": false
+    },
+    {
+      "id": "pixabay-corporate-ambient-background-charm-of-the-breeze-12159",
+      "title": "Corporate Ambient Background: Charm of the Breeze",
+      "provider": "Pixabay Music",
+      "source_page_url": "https://pixabay.com/music/corporate-this-corporate-ambient-background-charm-of-the-breeze-12159/",
+      "local_path": "tracks/corporate-ambient-background-charm-of-the-breeze-12159.mp3",
+      "moods": [
+        "corporate",
+        "calm",
+        "neutral",
+        "focused"
+      ],
+      "themes": [
+        "finance",
+        "analysis",
+        "education",
+        "productivity",
+        "office"
+      ],
+      "tags": [
+        "ambient",
+        "background",
+        "steady",
+        "minimal"
+      ],
+      "energy": "low",
+      "content_id_registered": false
+    },
+    {
+      "id": "incompetech-pleasant-porridge",
+      "title": "Pleasant Porridge",
+      "provider": "Incompetech",
+      "source_page_url": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100714",
+      "local_path": "tracks/incompetech-pleasant-porridge.mp3",
+      "moods": [
+        "calm",
+        "focused",
+        "light",
+        "neutral"
+      ],
+      "themes": [
+        "finance",
+        "planning",
+        "explainer",
+        "productivity"
+      ],
+      "tags": [
+        "ambient",
+        "soft",
+        "background"
+      ],
+      "energy": "medium",
+      "content_id_registered": false,
+      "license": "CC BY 4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/"
+    },
+    {
+      "id": "incompetech-backed-vibes-clean",
+      "title": "Backed Vibes Clean",
+      "provider": "Incompetech",
+      "source_page_url": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100479",
+      "local_path": "tracks/incompetech-backed-vibes-clean.mp3",
+      "moods": [
+        "corporate",
+        "focused",
+        "steady",
+        "hopeful"
+      ],
+      "themes": [
+        "finance",
+        "business",
+        "education",
+        "analysis"
+      ],
+      "tags": [
+        "clean",
+        "modern",
+        "background"
+      ],
+      "energy": "medium",
+      "content_id_registered": false,
+      "license": "CC BY 4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/"
+    }
+  ]
+}
