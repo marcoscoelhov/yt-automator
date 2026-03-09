@@ -3079,7 +3079,7 @@ def _render_caption_png(text: str, out_path: str, size=(1280, 720)) -> str:
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
     x = int((W - tw) / 2)
-    y = max(0, int(H * 0.80 - (th / 2)))
+    y = max(0, int(H * 0.84 - (th / 2)))
     stroke_width = max(4, int(font_size * 0.12))
 
     # stroke (preto) + fill (branco)
