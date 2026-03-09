@@ -100,14 +100,14 @@
                     "output_height": 1080
                 },
                 "moviepy_test": {
-                    "fps": 20,
+                    "fps": 18,
                     "codec": "libx264",
                     "audio_codec": "aac",
-                    "preset": "veryfast",
-                    "crf": 28,
-                    "threads": 2,
-                    "output_width": 960,
-                    "output_height": 540
+                    "preset": "ultrafast",
+                    "crf": 30,
+                    "threads": 4,
+                    "output_width": 854,
+                    "output_height": 480
                 },
                 "ffmpeg": {
                     "path": "ffmpeg",

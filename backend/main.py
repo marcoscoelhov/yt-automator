@@ -648,6 +648,43 @@ def _derive_caption_line(text: str, max_chars: int = 56) -> str:
     return text
 
 
+def _short_form_scene_target_count(target_duration_sec: float, *, aggressive: bool = False) -> int:
+    target_duration_sec = max(TEST_MODE_MIN_DURATION_SEC, min(TEST_MODE_MAX_DURATION_SEC, float(target_duration_sec)))
+    base_count = int(round(target_duration_sec / 6.0))
+    if aggressive:
+        base_count -= 1
+    return max(4 if aggressive else 5, min(8, base_count))
+
+
+def _trim_spoken_text(text: str, max_chars: int = 135) -> str:
+    text = _clean_caption_text(text)
+    if not text:
+        return ""
+    text = re.sub(r"\s+", " ", text).strip()
+    chunks = [part.strip(" ,;:-") for part in re.split(r"(?<=[.!?])\s+|,\s+", text) if part.strip()]
+    if not chunks:
+        chunks = [text]
+
+    chosen = ""
+    for part in chunks:
+        candidate = f"{chosen} {part}".strip() if chosen else part
+        if chosen and len(candidate) > max_chars:
+            break
+        chosen = candidate
+        if len(chosen) >= max_chars - 18:
+            break
+
+    if not chosen:
+        cut = text[:max_chars].rstrip()
+        if " " in cut:
+            cut = cut.rsplit(" ", 1)[0]
+        chosen = cut.strip(" ,;:-")
+
+    if chosen and chosen[-1] not in ".!?":
+        chosen = chosen.rstrip(",;: ") + "."
+    return chosen
+
+
 def _prepare_tts_scene_text(scene: Scene | dict) -> str:
     if isinstance(scene, dict):
         raw = scene.get("texto_narracao") or scene.get("description") or ""
@@ -704,6 +741,36 @@ def _build_tts_script(scenes: List[Scene]) -> str:
         if chunk:
             chunks.append(chunk)
     return "\n\n\n".join(chunks).strip()
+
+
+def _tighten_short_form_scenes(scenes: List[Scene], target_duration_sec: float, *, aggressive: bool = False) -> List[Scene]:
+    if not scenes:
+        return scenes
+
+    target_scene_count = _short_form_scene_target_count(target_duration_sec, aggressive=aggressive)
+    selected = list(scenes[:target_scene_count])
+    scene_duration = round(float(target_duration_sec) / max(len(selected), 1), 1)
+    scene_duration = max(3.0, min(6.0, scene_duration))
+    max_chars = 100 if aggressive else 128
+    caption_chars = 44 if aggressive else 50
+
+    tightened: List[Scene] = []
+    for idx, scene in enumerate(selected, start=1):
+        sc = scene.model_copy(deep=True)
+        raw_text = sc.get_narration or sc.description or ""
+        trimmed = _trim_spoken_text(raw_text, max_chars=max_chars)
+        if not trimmed:
+            trimmed = _trim_spoken_text(raw_text or f"Cena {idx}.", max_chars=max_chars)
+        beat = (sc.beat or _infer_scene_beat(trimmed, idx - 1, len(selected), short_form=True)).strip().lower() or "proof"
+        sc.id = idx
+        sc.texto_narracao = trimmed
+        sc.duracao_estimada = scene_duration
+        sc.beat = beat
+        sc.caption_line = _derive_caption_line(sc.caption_line or trimmed, max_chars=caption_chars)
+        sc.pose_family = sc.pose_family or beat
+        sc.prop_family = sc.prop_family or beat
+        tightened.append(sc)
+    return tightened
 
 
 def _build_target_beats(scene_count: int, short_form: bool) -> list[str]:
@@ -1130,7 +1197,7 @@ def _fit_short_form_plan(plan: dict, target_duration_sec: float) -> dict:
         return plan
 
     target_duration_sec = max(TEST_MODE_MIN_DURATION_SEC, min(TEST_MODE_MAX_DURATION_SEC, float(target_duration_sec)))
-    target_scene_count = max(6, min(12, int(round(target_duration_sec / 5.0))))
+    target_scene_count = _short_form_scene_target_count(target_duration_sec)
     base_scene_duration = round(target_duration_sec / target_scene_count, 1)
     base_scene_duration = max(3.5, min(6.0, base_scene_duration))
 
@@ -3569,6 +3636,11 @@ async def _run_auto_generate(
         if not scenes_objs:
             raise Exception("Plano de cenas vazio após LLM.")
 
+        if test_mode:
+            scenes_objs = _tighten_short_form_scenes(scenes_objs, target_duration_sec)
+            plan['scenes'] = [s.model_dump() for s in scenes_objs]
+            plan['script'] = " ".join((s.get_narration or "").strip() for s in scenes_objs if (s.get_narration or "").strip())
+
         push_stage(
             "script_ready",
             llm_ok=True,
@@ -3587,8 +3659,24 @@ async def _run_auto_generate(
         )
         is_valid, actual_duration = _ensure_minimum_audio_duration(test_audio, min_sec=target_duration_sec)
 
+        if test_mode and actual_duration > (target_duration_sec * 1.18):
+            print(
+                f"[Run {run_id}] TEST MODE acima do alvo ({actual_duration:.1f}s > {target_duration_sec:.1f}s). "
+                "Aplicando compressão agressiva."
+            )
+            scenes_objs = _tighten_short_form_scenes(scenes_objs, target_duration_sec, aggressive=True)
+            plan['scenes'] = [s.model_dump() for s in scenes_objs]
+            plan['script'] = " ".join((s.get_narration or "").strip() for s in scenes_objs if (s.get_narration or "").strip())
+            test_audio = await _wait_with_deadline(
+                service_generate_audio(scenes_objs, voice_id),
+                operation="Pré-check de áudio compactado",
+                deadline=deadline,
+                cap_seconds=300,
+            )
+            is_valid, actual_duration = _ensure_minimum_audio_duration(test_audio, min_sec=max(24.0, target_duration_sec * 0.75))
+
         # Reescalar cenas baseado na duração real do áudio: roteiro/5 = cenas
-        if is_valid and actual_duration > (20.0 if test_mode else 60.0):
+        if (not test_mode) and is_valid and actual_duration > 60.0:
             scenes_objs = _resplit_scenes_by_audio_duration(scenes_objs, actual_duration, target_sec_per_scene=5.0)
             # Atualizar o script no plan com a concatenação das novas cenas
             plan['scenes'] = [s.model_dump() for s in scenes_objs]
