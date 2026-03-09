@@ -105,7 +105,7 @@
                     "audio_codec": "aac",
                     "preset": "ultrafast",
                     "crf": 30,
-                    "threads": 4,
+                    "threads": 2,
                     "output_width": 854,
                     "output_height": 480
                 },
