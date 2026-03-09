@@ -40,8 +40,12 @@ Thumbs.db
 
 # Arquivos temporários do app
 backend/temp/
+backend/runs/
 backend/static/*.mp4
+backend/static/*.srt
 backend/static/*.webm
+.yt-automator.pid
+.yt-automator-worker.pid
 
 # Logs
 *.log

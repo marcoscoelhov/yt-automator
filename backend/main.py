@@ -401,6 +401,7 @@ class VideoGenerationRequest(BaseModel):
     mode: Optional[str] = "images"  # images | layers
     title: Optional[str] = None
     brief: Optional[str] = None
+    test_mode: Optional[bool] = False
 
 class VideoResponse(BaseModel):
     status: str
@@ -3492,10 +3493,32 @@ async def _run_auto_generate(
     started = time.time()
     deadline = started + AUTO_GENERATE_MAX_SECONDS
     print(f"[Run {run_id}] {route_name} iniciado")
+    stage_started_at = started
+    stage_durations: dict[str, float] = {}
+    stage_history: list[dict[str, object]] = []
 
     def push_stage(stage: str, **progress_updates):
+        nonlocal stage_started_at
+        now = time.time()
+        if stage_history:
+            previous_stage = str(stage_history[-1]["stage"])
+            stage_durations[f"{previous_stage}_seconds"] = round(now - stage_started_at, 2)
+        stage_started_at = now
+        stage_history.append(
+            {
+                "stage": stage,
+                "at": datetime.utcnow().isoformat() + "Z",
+                "pipeline_elapsed_seconds": round(now - started, 2),
+            }
+        )
+        merged_updates = {
+            "pipeline_elapsed_seconds": round(now - started, 2),
+            "stage_durations": dict(stage_durations),
+            "stage_history": list(stage_history),
+        }
+        merged_updates.update(progress_updates)
         if stage_callback:
-            stage_callback(stage, progress_updates)
+            stage_callback(stage, merged_updates)
 
     try:
         brief = (payload.brief or payload.tema or '').strip()
@@ -3514,6 +3537,8 @@ async def _run_auto_generate(
             target_duration_sec = max(TEST_MODE_MIN_DURATION_SEC, min(TEST_MODE_MAX_DURATION_SEC, float(target_duration_sec)))
         else:
             target_duration_sec = max(120.0, float(target_duration_sec))
+        render_profile = "test" if test_mode else "production"
+        render_cfg = get_render_settings(render_profile)
 
         push_stage(
             "llm",
@@ -3588,6 +3613,7 @@ async def _run_auto_generate(
             mode=mode,
             title=plan.get('title', ''),
             brief=brief,
+            test_mode=test_mode,
         )
 
         video_resp = await _wait_with_deadline(
@@ -3619,6 +3645,7 @@ async def _run_auto_generate(
             "job_id": None,
             "elapsed_seconds": round(elapsed, 2),
         }
+        stage_durations["render_seconds"] = round(time.time() - stage_started_at, 2)
         run_dir = _persist_run_artifacts(
             run_id,
             {
@@ -3631,6 +3658,8 @@ async def _run_auto_generate(
                 "validation_mode": validation_mode,
                 "render_profile": render_profile,
                 "render_settings": render_cfg,
+                "stage_durations": dict(stage_durations),
+                "stage_history": list(stage_history),
             },
             plan,
             response_payload,
@@ -3777,6 +3806,8 @@ async def generate_video(payload: VideoGenerationRequest, request: Request):
     started = time.time()
     print(f"[Run {run_id}] /generate-video iniciado")
     try:
+        test_mode = bool(payload.test_mode)
+
         # 1. Processar cenas
         scenes_to_process = payload.scenes
         

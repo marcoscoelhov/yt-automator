@@ -9,6 +9,18 @@ PIDFILE="$PROJECT_ROOT/.yt-automator.pid"
 PORT="${YT_AUTOMATOR_PORT:-8020}"
 LOGFILE="/tmp/yt-automator-${PORT}.log"
 
+wait_for_health() {
+  local attempts=0
+  while [[ $attempts -lt 20 ]]; do
+    if curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+    attempts=$((attempts + 1))
+  done
+  return 1
+}
+
 detect_port_pid() {
   ss -ltnp 2>/dev/null | awk -v p=":${PORT} " '$0 ~ p {print $NF}' | sed -n 's/.*pid=\([0-9]\+\).*/\1/p' | head -n1
 }
@@ -36,13 +48,15 @@ start() {
     exit 0
   fi
   cd "$ROOT"
-  nohup "$PYTHON_BIN" -m uvicorn main:app --host 0.0.0.0 --port "$PORT" >>"$LOGFILE" 2>&1 &
+  : > "$LOGFILE"
+  setsid "$PYTHON_BIN" -m uvicorn main:app --host 0.0.0.0 --port "$PORT" </dev/null >>"$LOGFILE" 2>&1 &
   echo $! > "$PIDFILE"
-  sleep 2
-  if is_running; then
+  disown || true
+  if wait_for_health && is_running; then
     echo "started pid=$(cat "$PIDFILE") port=$PORT"
   else
     echo "failed to start"
+    tail -n 80 "$LOGFILE" || true
     exit 1
   fi
 }
