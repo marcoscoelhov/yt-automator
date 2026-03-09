@@ -8,6 +8,7 @@ import time
 from job_queue import (
     claim_next_job,
     complete_job,
+    fail_orphaned_jobs,
     fail_job,
     init_db,
     record_worker_heartbeat,
@@ -17,6 +18,7 @@ from main import AutoGenerateRequest, _run_auto_generate
 
 
 POLL_INTERVAL_SECONDS = float(os.getenv("YT_AUTOMATOR_WORKER_POLL_SECONDS", "2.0"))
+HEARTBEAT_INTERVAL_SECONDS = float(os.getenv("YT_AUTOMATOR_WORKER_HEARTBEAT_SECONDS", "15.0"))
 WORKER_ID = os.getenv(
     "YT_AUTOMATOR_WORKER_ID",
     f"{socket.gethostname()}-{os.getpid()}",
@@ -58,10 +60,22 @@ async def process_job(job: dict) -> None:
         fail_job(job_id, result_payload.get("message") or "job failed", result_payload)
 
 
+async def _running_heartbeat(job_id: str, stop_event: asyncio.Event) -> None:
+    while not stop_event.is_set() and not STOP_REQUESTED:
+        record_worker_heartbeat(WORKER_ID, "running", job_id)
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=HEARTBEAT_INTERVAL_SECONDS)
+        except asyncio.TimeoutError:
+            continue
+
+
 async def worker_loop() -> int:
     init_db()
     print(f"[Worker] iniciado worker_id={WORKER_ID}")
     while not STOP_REQUESTED:
+        reaped = fail_orphaned_jobs()
+        if reaped:
+            print(f"[Worker] jobs órfãos marcados como failed: {','.join(reaped)}")
         record_worker_heartbeat(WORKER_ID, "idle", None)
         job = claim_next_job(WORKER_ID, "auto_generate")
         if not job:
@@ -72,6 +86,8 @@ async def worker_loop() -> int:
         print(f"[Worker] job claim job_id={job_id} route={job.get('route_name')}")
         record_worker_heartbeat(WORKER_ID, "running", job_id)
         update_job_progress(job_id, status="running", stage="starting", progress_updates={"worker_id": WORKER_ID})
+        heartbeat_stop = asyncio.Event()
+        heartbeat_task = asyncio.create_task(_running_heartbeat(job_id, heartbeat_stop))
         try:
             await process_job(job)
             print(f"[Worker] job concluído job_id={job_id}")
@@ -79,6 +95,11 @@ async def worker_loop() -> int:
             print(f"[Worker] job falhou job_id={job_id}: {exc}", file=sys.stderr)
             fail_job(job_id, str(exc), {"job_id": job_id, "status": "error", "message": str(exc)})
         finally:
+            heartbeat_stop.set()
+            try:
+                await heartbeat_task
+            except Exception:
+                pass
             record_worker_heartbeat(WORKER_ID, "idle", None)
 
     record_worker_heartbeat(WORKER_ID, "stopped", None)

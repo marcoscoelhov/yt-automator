@@ -7,6 +7,17 @@ PROJECT_ROOT="$(cd -- "${ROOT}/.." && pwd)"
 PYTHON_BIN="$ROOT/.venv/bin/python"
 PIDFILE="$PROJECT_ROOT/.yt-automator-worker.pid"
 LOGFILE="/tmp/yt-automator-worker.log"
+ENVFILE="$ROOT/.env"
+export PATH="$ROOT/.venv/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
+load_env() {
+  if [[ -f "$ENVFILE" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENVFILE"
+    set +a
+  fi
+}
 
 detect_worker_pid() {
   ps -eo pid=,args= | awk -v root="$ROOT" '$0 ~ /worker\.py/ && index($0, root) {print $1; exit}'
@@ -35,6 +46,7 @@ start() {
     exit 0
   fi
   cd "$ROOT"
+  load_env
   : > "$LOGFILE"
   setsid "$PYTHON_BIN" worker.py </dev/null >>"$LOGFILE" 2>&1 &
   echo $! > "$PIDFILE"

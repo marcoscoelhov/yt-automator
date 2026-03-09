@@ -176,6 +176,29 @@ def get_render_settings(profile: str = "production") -> dict:
     }
 
 
+def _stabilize_render_settings(render_cfg: dict | None, scene_count: int) -> dict:
+    cfg = dict(render_cfg or get_render_settings())
+    is_production = str(cfg.get("profile") or "production").strip().lower() == "production"
+    if not is_production or scene_count < 60:
+        cfg["memory_safe_mode"] = False
+        return cfg
+
+    try:
+        crf_value = max(int(cfg.get("crf") or 18), 22)
+    except Exception:
+        crf_value = 22
+
+    stable = dict(cfg)
+    stable["width"] = min(int(cfg.get("width") or 1920), 1280)
+    stable["height"] = min(int(cfg.get("height") or 1080), 720)
+    stable["fps"] = min(int(cfg.get("fps") or 24), 20)
+    stable["threads"] = min(int(cfg.get("threads") or 2), 2)
+    stable["preset"] = "veryfast" if str(cfg.get("preset") or "").strip().lower() not in {"ultrafast", "superfast"} else cfg["preset"]
+    stable["crf"] = str(crf_value)
+    stable["memory_safe_mode"] = True
+    return stable
+
+
 def get_audio_mix_settings() -> dict:
     audio_cfg = get_config("services.audio_post", {}) or {}
     bg_path = os.getenv("YT_AUTOMATOR_BG_MUSIC_PATH") or audio_cfg.get("background_music_path") or ""
@@ -402,6 +425,7 @@ class VideoGenerationRequest(BaseModel):
     title: Optional[str] = None
     brief: Optional[str] = None
     test_mode: Optional[bool] = False
+    public_base_url: Optional[str] = None
 
 class VideoResponse(BaseModel):
     status: str
@@ -421,6 +445,7 @@ class AutoGenerateRequest(BaseModel):
     test_mode: Optional[bool] = False
     target_duration_sec: Optional[float] = None
     validation_mode: Optional[str] = "auto"  # auto | strict | relaxed
+    public_base_url: Optional[str] = None
 
 class AutoGenerateResponse(BaseModel):
     status: str
@@ -639,13 +664,18 @@ def _normalize_scene_text(text: str, max_sentences: int = 2, max_chars: int = 24
 
 
 def _derive_caption_line(text: str, max_chars: int = 56) -> str:
-    text = _normalize_scene_text(text, max_sentences=1, max_chars=max_chars)
+    text = _normalize_scene_text(text, max_sentences=1, max_chars=max_chars * 3)
     if not text:
         return ""
-    text = text.rstrip(".!? ")
-    if len(text) > max_chars:
-        text = text[: max_chars - 1].rstrip() + "…"
-    return text
+    text = re.sub(r"\s+", " ", text).strip().rstrip(".!? ")
+    if len(text) <= max_chars:
+        return text
+    cut = text[: max_chars + 1].rstrip()
+    if len(cut) > max_chars:
+        cut = cut[:max_chars].rstrip()
+    if " " in cut and len(cut) < len(text):
+        cut = cut.rsplit(" ", 1)[0].rstrip()
+    return cut.rstrip(" ,;:-.!?") or text[:max_chars].rstrip(" ,;:-.!?")
 
 
 def _short_form_scene_target_count(target_duration_sec: float, *, aggressive: bool = False) -> int:
@@ -683,6 +713,27 @@ def _trim_spoken_text(text: str, max_chars: int = 135) -> str:
     if chosen and chosen[-1] not in ".!?":
         chosen = chosen.rstrip(",;: ") + "."
     return chosen
+
+
+def _downsample_scene_dicts(scenes: list[dict], max_scenes: int) -> list[dict]:
+    if len(scenes) <= max_scenes:
+        return [dict(scene) for scene in scenes]
+
+    selected_indices: list[int] = []
+    total = len(scenes)
+    for idx in range(max_scenes):
+        source_idx = round(idx * (total - 1) / max(max_scenes - 1, 1))
+        if selected_indices and source_idx <= selected_indices[-1]:
+            source_idx = min(total - 1, selected_indices[-1] + 1)
+        selected_indices.append(source_idx)
+
+    reduced: list[dict] = []
+    for new_id, source_idx in enumerate(selected_indices, start=1):
+        scene = dict(scenes[source_idx])
+        scene["id"] = new_id
+        scene["caption_line"] = _derive_caption_line(scene.get("caption_line") or scene.get("texto_narracao") or "")
+        reduced.append(scene)
+    return reduced
 
 
 def _split_sentences_loose(text: str) -> list[str]:
@@ -1375,9 +1426,12 @@ def _build_fallback_scene_plan(brief: str, long_form: bool = True, target_durati
 
 
 def _enforce_target_duration(plan: dict, min_sec: float = 480.0, max_sec: float = 900.0) -> dict:
-    scenes = plan.get('scenes') or []
+    scenes = [dict(sc) for sc in (plan.get('scenes') or []) if isinstance(sc, dict)]
     if not scenes:
         return plan
+    max_scenes = 90
+    if len(scenes) > max_scenes:
+        scenes = _downsample_scene_dicts(scenes, max_scenes)
 
     # FIX 4: Expansões variadas relacionadas a finanças pessoais
     INTELLIGENT_EXPANSIONS = [
@@ -1415,7 +1469,7 @@ def _enforce_target_duration(plan: dict, min_sec: float = 480.0, max_sec: float 
 
     # se ainda estiver curto, duplica cenas até bater mínimo
     i = 0
-    while total < min_sec and len(scenes) < 120:
+    while total < min_sec and len(scenes) < max_scenes:
         base = scenes[i % len(scenes)].copy()
         base['id'] = len(scenes) + 1
         
@@ -1434,6 +1488,10 @@ def _enforce_target_duration(plan: dict, min_sec: float = 480.0, max_sec: float 
         for s in scenes:
             d = float(s.get('duracao_estimada') or 7.0)
             s['duracao_estimada'] = max(5.0, min(12.0, d * factor))
+
+    for idx, scene in enumerate(scenes, start=1):
+        scene['id'] = idx
+        scene['caption_line'] = _derive_caption_line(scene.get('caption_line') or scene.get('texto_narracao') or '')
 
     plan['scenes'] = scenes
     plan['script'] = ' '.join((s.get('texto_narracao') or '') for s in scenes)
@@ -1493,19 +1551,12 @@ def _llm_generate_scene_plan(
     max_attempts = LLM_MAX_RETRIES + 1
     last_error = None
 
-    def _finalize_plan(raw: dict, allow_relaxed_script: bool = False, allow_plan_fallback: bool = False) -> dict:
+    def _finalize_plan(raw: dict, allow_relaxed_script: bool = False) -> dict:
         catalog = _load_layers_asset_catalog()
         try:
             plan = _validate_scene_plan(raw, catalog)
-        except Exception:
-            if not allow_plan_fallback:
-                raise
-            print("[AutoGenerate] JSON utilizável, mas plano inválido. Aplicando fallback determinístico.")
-            plan = _build_fallback_scene_plan(
-                brief,
-                long_form=not short_form,
-                target_duration_sec=target_duration_sec,
-            )
+        except Exception as exc:
+            raise Exception(f"Plano de cenas inválido retornado pelo LLM: {exc}") from exc
 
         min_sections_required = 2 if short_form else (8 if validation_mode == "strict" else 5)
         is_valid_script, script_errors = _validate_script_structure(
@@ -1601,7 +1652,7 @@ def _llm_generate_scene_plan(
                 text = ((data.get('choices') or [{}])[0].get('message') or {}).get('content') or ''
                 raw = _safe_json_extract(text)
                 if validation_mode == "relaxed":
-                    return _finalize_plan(raw, allow_relaxed_script=True, allow_plan_fallback=True)
+                    return _finalize_plan(raw, allow_relaxed_script=True)
 
                 try:
                     return _finalize_plan(raw)
@@ -1609,7 +1660,7 @@ def _llm_generate_scene_plan(
                     print(f"[AutoGenerate] LLM retornou JSON mas falhou na validação estrita: {strict_error}")
                     if validation_mode == "strict":
                         raise
-                    return _finalize_plan(raw, allow_relaxed_script=True, allow_plan_fallback=True)
+                    return _finalize_plan(raw, allow_relaxed_script=True)
             except Exception as e:
                 last_error = e
                 if attempt < max_attempts - 1:
@@ -1623,26 +1674,17 @@ def _llm_generate_scene_plan(
     try:
         raw = _generate_via_openclaw_agent()
         if validation_mode == "relaxed":
-            return _finalize_plan(raw, allow_relaxed_script=True, allow_plan_fallback=True)
+            return _finalize_plan(raw, allow_relaxed_script=True)
         try:
             return _finalize_plan(raw)
         except Exception as strict_error:
             print(f"[AutoGenerate] OpenClaw strict falhou, tentando modo relaxado: {strict_error}")
             if validation_mode == "strict":
                 raise
-            return _finalize_plan(raw, allow_relaxed_script=True, allow_plan_fallback=True)
+            return _finalize_plan(raw, allow_relaxed_script=True)
     except Exception as openclaw_error:
-        print(f"[AutoGenerate] OpenClaw indisponível, usando fallback de roteiro local: {openclaw_error}")
-        try:
-            fallback = _build_fallback_scene_plan(
-                brief,
-                long_form=not short_form,
-                target_duration_sec=target_duration_sec,
-            )
-            return _finalize_plan(fallback, allow_relaxed_script=True, allow_plan_fallback=True)
-        except Exception as fallback_error:
-            detail = f"Falha no LLM OpenAI/OpenClaw: openai={last_error}; openclaw={openclaw_error}; fallback={fallback_error}"
-            raise HTTPException(status_code=502, detail=detail) from fallback_error
+        detail = f"Falha no LLM OpenAI/OpenClaw sem fallback local: openai={last_error}; openclaw={openclaw_error}"
+        raise HTTPException(status_code=502, detail=detail) from openclaw_error
 
 
 def _remaining_seconds(deadline: float) -> float:
@@ -2055,8 +2097,8 @@ def _resplit_scenes_by_audio_duration(scenes: List[Scene], audio_duration: float
     # Calcular número de cenas = áudio / 6 segundos
     num_scenes = max(1, int(round(audio_duration / target_sec_per_scene)))
     
-    # Não exceder 200 cenas (limite razoável)
-    num_scenes = min(num_scenes, 150)
+    # Não exceder 90 cenas para manter o render full estável.
+    num_scenes = min(num_scenes, 90)
     
     print(f"  → Reescalando {len(scenes)} cenas → {num_scenes} cenas ({audio_duration:.1f}s / {target_sec_per_scene}s por cena)")
     
@@ -2977,9 +3019,7 @@ def _caption_for_scene(scene: Scene, max_chars: int = 40) -> str:
     if not raw:
         return ""
     first = re.split(r"(?<=[\.!\?])\s+", raw, maxsplit=1)[0].strip()
-    if len(first) > max_chars:
-        first = first[: max_chars - 1].rstrip() + "…"
-    return first
+    return _derive_caption_line(first, max_chars=max_chars)
 
 
 def _format_srt_timestamp(seconds: float) -> str:
@@ -3059,7 +3099,7 @@ def _render_caption_png(text: str, out_path: str, size=(1280, 720)) -> str:
     # garante 1 linha (sem wrap). se estourar, corta.
     max_chars = 40 if W <= 960 else 46
     if len(text) > max_chars:
-        text = text[: max_chars - 1].rstrip() + "…"
+        text = _derive_caption_line(text, max_chars=max_chars)
 
     font_size = max(26, int(H * 0.048))
     min_font_size = max(20, int(H * 0.038))
@@ -3113,9 +3153,15 @@ async def service_render_video(
     if not audio_path or not os.path.exists(audio_path):
         raise Exception("Arquivo de áudio não encontrado.")
 
-    render_cfg = render_cfg or get_render_settings()
+    render_cfg = _stabilize_render_settings(render_cfg or get_render_settings(), len(scenes))
     width = render_cfg["width"]
     height = render_cfg["height"]
+    memory_safe_mode = bool(render_cfg.get("memory_safe_mode"))
+    print(
+        f"[Orchestrator] Render cfg: {width}x{height} @ {render_cfg['fps']}fps | "
+        f"preset={render_cfg['preset']} crf={render_cfg['crf']} threads={render_cfg['threads']} "
+        f"memory_safe_mode={memory_safe_mode}"
+    )
 
     # Carregar áudio para saber a duração total
     source_audio_clip = AudioFileClip(audio_path)
@@ -3171,7 +3217,9 @@ async def service_render_video(
         if scene:
             transition = scene.get_transition
 
-        if transition in ["zoom_in", "zoom_out"]:
+        if memory_safe_mode:
+            transition = "cut"
+        elif transition in ["zoom_in", "zoom_out"]:
             transition = "cut"
 
         if transition == "crossfade":
@@ -3198,7 +3246,8 @@ async def service_render_video(
         current_time += scene_duration
     
     # Concatenar com método compose para suportar crossfades
-    final_video = concatenate_videoclips(clips, method="compose")
+    concat_method = "chain" if memory_safe_mode else "compose"
+    final_video = concatenate_videoclips(clips, method=concat_method)
     final_video = final_video.set_audio(audio_clip)
 
     # FIX: libx264 + yuv420p exige dimensões pares (divisíveis por 2)
@@ -3218,18 +3267,33 @@ async def service_render_video(
     print(f"[Orchestrator] Renderizando {len(clips)} cenas ({total_audio_duration:.1f}s total)...")
     
     # Renderizar (qualidade ok sem ficar "ultrafast")
-    final_video.write_videofile(
-        output_path,
-        fps=render_cfg["fps"],
-        codec=render_cfg["codec"],
-        audio_codec=render_cfg["audio_codec"],
-        temp_audiofile=os.path.join(TEMP_DIR, "temp-audio.m4a"),
-        remove_temp=True,
-        logger=None,
-        preset=render_cfg["preset"],
-        ffmpeg_params=["-crf", str(render_cfg["crf"]), "-pix_fmt", "yuv420p"],
-        threads=render_cfg["threads"],
-    )
+    try:
+        final_video.write_videofile(
+            output_path,
+            fps=render_cfg["fps"],
+            codec=render_cfg["codec"],
+            audio_codec=render_cfg["audio_codec"],
+            temp_audiofile=os.path.join(TEMP_DIR, "temp-audio.m4a"),
+            remove_temp=True,
+            logger=None,
+            preset=render_cfg["preset"],
+            ffmpeg_params=["-crf", str(render_cfg["crf"]), "-pix_fmt", "yuv420p"],
+            threads=render_cfg["threads"],
+        )
+    finally:
+        try:
+            final_video.close()
+        except Exception:
+            pass
+        try:
+            audio_clip.close()
+        except Exception:
+            pass
+        for clip in clips:
+            try:
+                clip.close()
+            except Exception:
+                pass
     
     print(f"  ✅ Vídeo renderizado: {output_filename}")
     base_url = (static_base_url or get_static_base_url()).rstrip("/") + "/"
@@ -3648,6 +3712,7 @@ async def _run_auto_generate(
             target_duration_sec = max(TEST_MODE_MIN_DURATION_SEC, min(TEST_MODE_MAX_DURATION_SEC, float(target_duration_sec)))
         else:
             target_duration_sec = max(120.0, float(target_duration_sec))
+        short_form_requested = test_mode or target_duration_sec < 180.0
         render_profile = "test" if test_mode else "production"
         render_cfg = get_render_settings(render_profile)
 
@@ -3667,7 +3732,7 @@ async def _run_auto_generate(
             asyncio.to_thread(
                 _llm_generate_scene_plan,
                 brief,
-                test_mode,
+                short_form_requested,
                 target_duration_sec,
                 validation_mode,
             ),
@@ -3680,7 +3745,7 @@ async def _run_auto_generate(
         if not scenes_objs:
             raise Exception("Plano de cenas vazio após LLM.")
 
-        if test_mode:
+        if short_form_requested:
             scenes_objs = _tighten_short_form_scenes(scenes_objs, target_duration_sec)
             plan['scenes'] = [s.model_dump() for s in scenes_objs]
             plan['script'] = " ".join((s.get_narration or "").strip() for s in scenes_objs if (s.get_narration or "").strip())
@@ -3703,9 +3768,9 @@ async def _run_auto_generate(
         )
         is_valid, actual_duration = _ensure_minimum_audio_duration(test_audio, min_sec=target_duration_sec)
 
-        if test_mode and actual_duration > (target_duration_sec * 1.18):
+        if short_form_requested and actual_duration > (target_duration_sec * 1.18):
             print(
-                f"[Run {run_id}] TEST MODE acima do alvo ({actual_duration:.1f}s > {target_duration_sec:.1f}s). "
+                f"[Run {run_id}] SHORT FORM acima do alvo ({actual_duration:.1f}s > {target_duration_sec:.1f}s). "
                 "Aplicando compressão agressiva."
             )
             scenes_objs = _tighten_short_form_scenes(scenes_objs, target_duration_sec, aggressive=True)
@@ -3746,6 +3811,7 @@ async def _run_auto_generate(
             title=plan.get('title', ''),
             brief=brief,
             test_mode=test_mode,
+            public_base_url=payload.public_base_url,
         )
 
         video_resp = await _wait_with_deadline(
@@ -3759,10 +3825,12 @@ async def _run_auto_generate(
 
         message = 'Auto-generate concluído.'
         if not is_valid:
-            label = f"{int(target_duration_sec)}s" if test_mode else "8min"
+            label = f"{int(target_duration_sec)}s" if short_form_requested else "8min"
             message = f'Auto-generate concluído com duração de {actual_duration:.1f}s (abaixo do alvo de {label}).'
         elif test_mode:
             message = f'Auto-generate TEST MODE concluído com duração de {actual_duration:.1f}s.'
+        elif short_form_requested:
+            message = f'Auto-generate SHORT FORM concluído com duração de {actual_duration:.1f}s.'
 
         elapsed = time.time() - started
         print(f"[Run {run_id}] {route_name} concluído em {elapsed:.1f}s")
@@ -3841,15 +3909,22 @@ async def _run_auto_generate(
         )
 
 
-def _enqueue_auto_generate_job(payload: AutoGenerateRequest, route_name: str) -> JobSubmitResponse:
+def _enqueue_auto_generate_job(
+    payload: AutoGenerateRequest,
+    route_name: str,
+    request: Request | None = None,
+) -> JobSubmitResponse:
     brief = (payload.brief or payload.tema or "").strip()
     if len(brief) < 10:
         raise HTTPException(status_code=400, detail='brief/tema muito curto. Explique o tema, promessa e público-alvo (>=10 chars).')
 
+    normalized_payload = payload.model_copy(
+        update={"public_base_url": payload.public_base_url or get_public_static_base_url(request)}
+    )
     job = enqueue_job(
         "auto_generate",
         route_name,
-        payload.model_dump(),
+        normalized_payload.model_dump(),
         max_attempts=1,
     )
     return JobSubmitResponse(
@@ -3863,7 +3938,7 @@ def _enqueue_auto_generate_job(payload: AutoGenerateRequest, route_name: str) ->
 
 @app.post('/auto-generate', response_model=JobSubmitResponse)
 async def auto_generate(payload: AutoGenerateRequest, request: Request):
-    return _enqueue_auto_generate_job(payload, route_name="/auto-generate")
+    return _enqueue_auto_generate_job(payload, route_name="/auto-generate", request=request)
 
 
 @app.post('/auto-generate/smoke', response_model=JobSubmitResponse)
@@ -3876,7 +3951,7 @@ async def auto_generate_smoke(payload: AutoGenerateRequest, request: Request):
             "mode": "layers",
         }
     )
-    return _enqueue_auto_generate_job(smoke_payload, route_name="/auto-generate/smoke")
+    return _enqueue_auto_generate_job(smoke_payload, route_name="/auto-generate/smoke", request=request)
 
 
 @app.post('/auto-generate/smoke-batch', response_model=list[JobSubmitResponse])
@@ -3893,7 +3968,13 @@ async def auto_generate_smoke_batch(payload: SmokeBatchRequest, request: Request
     normalized_payload = AutoGenerateRequest(**smoke_payload.model_dump())
     responses = []
     for _ in range(count):
-        responses.append(_enqueue_auto_generate_job(normalized_payload, route_name="/auto-generate/smoke-batch"))
+        responses.append(
+            _enqueue_auto_generate_job(
+                normalized_payload,
+                route_name="/auto-generate/smoke-batch",
+                request=request,
+            )
+        )
     return responses
 
 
@@ -4059,7 +4140,7 @@ async def generate_video(payload: VideoGenerationRequest, request: Request):
                         image_paths,
                         audio_path,
                         scenes_to_process,
-                        static_base_url=get_public_static_base_url(request),
+                        static_base_url=(payload.public_base_url or get_public_static_base_url(request)),
                         render_cfg=render_cfg,
                     ),
                     timeout=900,

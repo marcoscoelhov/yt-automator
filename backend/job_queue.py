@@ -186,6 +186,77 @@ def queue_stats() -> dict:
     }
 
 
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except Exception:
+        return None
+
+
+def active_worker_ids(stale_after_seconds: int | None = None) -> set[str]:
+    stale_after = int(stale_after_seconds or WORKER_STALE_AFTER_SECONDS)
+    now = datetime.now(timezone.utc)
+    active: set[str] = set()
+    for worker in list_workers():
+        heartbeat = _parse_iso(worker.get("last_heartbeat"))
+        if not heartbeat:
+            continue
+        if (now - heartbeat).total_seconds() <= stale_after:
+            worker_id = str(worker.get("worker_id") or "").strip()
+            if worker_id:
+                active.add(worker_id)
+    return active
+
+
+def fail_orphaned_jobs(
+    *,
+    stale_after_seconds: int | None = None,
+    running_grace_seconds: int = 180,
+) -> list[str]:
+    init_db()
+    stale_after = int(stale_after_seconds or WORKER_STALE_AFTER_SECONDS)
+    active_ids = active_worker_ids(stale_after)
+    now = datetime.now(timezone.utc)
+    failed_ids: list[str] = []
+
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, worker_id, updated_at, started_at
+            FROM jobs
+            WHERE status = 'running'
+            ORDER BY created_at ASC
+            """
+        ).fetchall()
+
+    for row in rows:
+        job_id = str(row["id"])
+        worker_id = str(row["worker_id"] or "").strip()
+        reference_time = _parse_iso(row["updated_at"]) or _parse_iso(row["started_at"])
+        if not reference_time:
+            continue
+        age_seconds = (now - reference_time).total_seconds()
+        if age_seconds < max(stale_after, running_grace_seconds):
+            continue
+        if worker_id and worker_id in active_ids:
+            continue
+        fail_job(
+            job_id,
+            f"orphaned_job: worker={worker_id or 'missing'} stale_after={max(stale_after, running_grace_seconds)}s",
+            {
+                "job_id": job_id,
+                "status": "error",
+                "message": "Job órfão: worker sem heartbeat ativo.",
+                "worker_id": worker_id or None,
+            },
+        )
+        failed_ids.append(job_id)
+
+    return failed_ids
+
+
 def claim_next_job(worker_id: str, job_type: str | None = None) -> dict | None:
     init_db()
     conn = _connect()
