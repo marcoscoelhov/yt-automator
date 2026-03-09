@@ -99,6 +99,16 @@
                     "output_width": 1920,
                     "output_height": 1080
                 },
+                "moviepy_test": {
+                    "fps": 20,
+                    "codec": "libx264",
+                    "audio_codec": "aac",
+                    "preset": "veryfast",
+                    "crf": 28,
+                    "threads": 2,
+                    "output_width": 960,
+                    "output_height": 540
+                },
                 "ffmpeg": {
                     "path": "ffmpeg",
                     "preset": "fast"
@@ -116,18 +126,18 @@
             "voice_hum_cut_hz": 85,
             "voice_lowpass_hz": 9500,
             "voice_denoise_floor_db": -20,
-            "voice_compressor_threshold": 0.09,
-            "voice_compressor_ratio": 2.0
+            "voice_compressor_threshold": 0.12,
+            "voice_compressor_ratio": 1.6
         }
     },
     "transitions": {
         "zoom_in": {
-            "enabled": true,
+            "enabled": false,
             "scale_start": 1.0,
             "scale_end": 1.15
         },
         "zoom_out": {
-            "enabled": true,
+            "enabled": false,
             "scale_start": 1.15,
             "scale_end": 1.0
         },

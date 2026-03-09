@@ -148,17 +148,23 @@ os.makedirs(RUNS_DIR, exist_ok=True)
 init_job_db()
 
 
-def get_render_settings() -> dict:
+def get_render_settings(profile: str = "production") -> dict:
+    use_test_profile = str(profile or "production").strip().lower() == "test"
     moviepy_cfg = get_config("services.video_rendering.options.moviepy", {}) or {}
-    width = int(os.getenv("VIDEO_OUTPUT_WIDTH") or moviepy_cfg.get("output_width") or 1920)
-    height = int(os.getenv("VIDEO_OUTPUT_HEIGHT") or moviepy_cfg.get("output_height") or 1080)
-    fps = int(os.getenv("VIDEO_OUTPUT_FPS") or moviepy_cfg.get("fps") or 24)
-    codec = str(os.getenv("VIDEO_OUTPUT_CODEC") or moviepy_cfg.get("codec") or "libx264")
-    audio_codec = str(os.getenv("VIDEO_OUTPUT_AUDIO_CODEC") or moviepy_cfg.get("audio_codec") or "aac")
-    preset = str(os.getenv("VIDEO_OUTPUT_PRESET") or moviepy_cfg.get("preset") or "fast")
-    crf = str(os.getenv("VIDEO_OUTPUT_CRF") or moviepy_cfg.get("crf") or "18")
-    threads = int(os.getenv("VIDEO_OUTPUT_THREADS") or moviepy_cfg.get("threads") or 4)
+    moviepy_test_cfg = get_config("services.video_rendering.options.moviepy_test", {}) or {}
+    cfg = moviepy_test_cfg if use_test_profile else moviepy_cfg
+    prefix = "VIDEO_TEST_OUTPUT_" if use_test_profile else "VIDEO_OUTPUT_"
+
+    width = int(os.getenv(f"{prefix}WIDTH") or cfg.get("output_width") or moviepy_cfg.get("output_width") or 1920)
+    height = int(os.getenv(f"{prefix}HEIGHT") or cfg.get("output_height") or moviepy_cfg.get("output_height") or 1080)
+    fps = int(os.getenv(f"{prefix}FPS") or cfg.get("fps") or moviepy_cfg.get("fps") or 24)
+    codec = str(os.getenv(f"{prefix}CODEC") or cfg.get("codec") or moviepy_cfg.get("codec") or "libx264")
+    audio_codec = str(os.getenv(f"{prefix}AUDIO_CODEC") or cfg.get("audio_codec") or moviepy_cfg.get("audio_codec") or "aac")
+    preset = str(os.getenv(f"{prefix}PRESET") or cfg.get("preset") or moviepy_cfg.get("preset") or "fast")
+    crf = str(os.getenv(f"{prefix}CRF") or cfg.get("crf") or moviepy_cfg.get("crf") or "18")
+    threads = int(os.getenv(f"{prefix}THREADS") or cfg.get("threads") or moviepy_cfg.get("threads") or 4)
     return {
+        "profile": "test" if use_test_profile else "production",
         "width": width,
         "height": height,
         "fps": fps,
@@ -652,6 +658,10 @@ def _prepare_tts_scene_text(scene: Scene | dict) -> str:
     text = _normalize_scene_text(raw, max_sentences=2, max_chars=260)
     if not text:
         return ""
+    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s*([,;:])\s*", r"\1 ", text)
+    text = re.sub(r"\s+(mas|porque|entao|então|agora|depois|por isso|so que|só que|enquanto)\s+", r", \1 ", text, flags=re.I)
+    text = re.sub(r",\s*,+", ", ", text)
     if text[-1] not in ".!?":
         text = text.rstrip(",;: ") + "."
 
@@ -669,7 +679,21 @@ def _prepare_tts_scene_text(scene: Scene | dict) -> str:
         "close": ".",
     }
     pause = pause_map.get(beat, ".")
-    return f"{text} {pause}".strip()
+    bridge_map = {
+        "hook": " Agora presta atencao.",
+        "problem": " Respira.",
+        "belief_break": " E aqui vira o jogo.",
+        "authority": " Olha isso.",
+        "number": " Anota esse numero.",
+        "analogy": " Pensa nisso.",
+        "proof": " E melhora rapido.",
+        "mindset": " Sem pressa.",
+        "practical": " Faz assim.",
+        "warning": " Nao pula essa parte.",
+        "close": " E continua daqui.",
+    }
+    bridge = bridge_map.get(beat, "")
+    return f"{text}{bridge} {pause}".strip()
 
 
 def _build_tts_script(scenes: List[Scene]) -> str:
@@ -678,7 +702,7 @@ def _build_tts_script(scenes: List[Scene]) -> str:
         chunk = _prepare_tts_scene_text(scene)
         if chunk:
             chunks.append(chunk)
-    return "\n\n".join(chunks).strip()
+    return "\n\n\n".join(chunks).strip()
 
 
 def _build_target_beats(scene_count: int, short_form: bool) -> list[str]:
@@ -2069,8 +2093,7 @@ def _voice_cleanup_filter(settings: dict) -> str:
         f"highpass=f={hum_cut},"
         f"lowpass=f={lowpass},"
         f"afftdn=nf={denoise_floor}:tn=1,"
-        "dynaudnorm=f=150:g=13:p=0.9:m=10:s=10,"
-        f"acompressor=threshold={compressor_threshold}:ratio={compressor_ratio}:attack=6:release=90:makeup=2,"
+        f"acompressor=threshold={compressor_threshold}:ratio={compressor_ratio}:attack=18:release=180:makeup=1.4:knee=2.5,"
         "aresample=48000"
     )
 
@@ -2333,17 +2356,7 @@ def apply_zoom_effect(clip, zoom_type: str, duration: float):
     """
     Aplica efeito de zoom (Ken Burns) ao clip.
     """
-    if zoom_type == "zoom_in":
-        # Zoom in: começa em 100%, termina em 120%
-        def zoom_in_effect(get_frame, t):
-            scale = 1 + (0.2 * t / duration)  # 1.0 -> 1.2
-            return get_frame(t)
-        return clip.resize(lambda t: 1 + (0.15 * t / duration))
-    elif zoom_type == "zoom_out":
-        # Zoom out: começa em 120%, termina em 100%
-        return clip.resize(lambda t: 1.15 - (0.15 * t / duration))
-    else:
-        return clip
+    return clip
 
 def resize_to_fill(clip, target_width, target_height):
     """Redimensiona o clip para preencher a tela (crop) mantendo aspect ratio"""
@@ -2836,10 +2849,10 @@ def _render_layer_scene_to_png(scene: Scene, out_path: str, size=(1280, 720)) ->
     return out_path
 
 
-async def service_generate_layer_images(scenes: List[Scene]):
+async def service_generate_layer_images(scenes: List[Scene], render_cfg: dict | None = None):
     """Gera um PNG por cena usando o motor de layers (assets locais)."""
     print(f"[Orchestrator] Gerando {len(scenes)} cenas em modo layers (assets locais)...")
-    render_cfg = get_render_settings()
+    render_cfg = render_cfg or get_render_settings()
     size = (render_cfg["width"], render_cfg["height"])
     out_paths = []
     for scene in scenes:
@@ -2955,7 +2968,7 @@ def _render_caption_png(text: str, out_path: str, size=(1280, 720)) -> str:
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
     x = int((W - tw) / 2)
-    y = int(H * 0.82)
+    y = max(0, int(H * 0.87 - (th / 2)))
 
     # stroke (preto) + fill (branco)
     draw.text(
@@ -2971,7 +2984,13 @@ def _render_caption_png(text: str, out_path: str, size=(1280, 720)) -> str:
     return out_path
 
 
-async def service_render_video(image_paths: List[str], audio_path: str, scenes: List[Scene], static_base_url: str | None = None):
+async def service_render_video(
+    image_paths: List[str],
+    audio_path: str,
+    scenes: List[Scene],
+    static_base_url: str | None = None,
+    render_cfg: dict | None = None,
+):
     """
     Compõe imagens e áudio usando MoviePy com suporte a:
     - Transições (zoom_in, zoom_out, crossfade, cut)
@@ -2982,7 +3001,7 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
     if not audio_path or not os.path.exists(audio_path):
         raise Exception("Arquivo de áudio não encontrado.")
 
-    render_cfg = get_render_settings()
+    render_cfg = render_cfg or get_render_settings()
     width = render_cfg["width"]
     height = render_cfg["height"]
 
@@ -3035,21 +3054,15 @@ async def service_render_video(image_paths: List[str], audio_path: str, scenes: 
             
         clip = clip.set_position("center")
         
-        # Aplicar efeito de zoom baseado no tipo de transição
+        # Aplicar apenas transições estáveis para evitar tremido.
         transition = None
         if scene:
             transition = scene.get_transition
 
-        # Dinamismo padrão (se vier tudo "cut"):
-        if transition in [None, "", "cut"]:
-            # alterna zooms pra dar vida sem depender do prompt
-            transition = "zoom_in" if (i % 4 in (0, 1)) else "zoom_out"
-
         if transition in ["zoom_in", "zoom_out"]:
-            clip = apply_zoom_effect(clip, transition, scene_duration)
-            if scene:
-                print(f"  🎬 Cena {scene.id}: {transition} ({scene_duration:.1f}s)")
-        elif transition == "crossfade":
+            transition = "cut"
+
+        if transition == "crossfade":
             # Crossfade será aplicado na concatenação
             clip = clip.crossfadein(0.5) if i > 0 else clip
             if scene:
@@ -3616,6 +3629,8 @@ async def _run_auto_generate(
                 "test_mode": test_mode,
                 "target_duration_sec": target_duration_sec,
                 "validation_mode": validation_mode,
+                "render_profile": render_profile,
+                "render_settings": render_cfg,
             },
             plan,
             response_payload,
@@ -3630,6 +3645,7 @@ async def _run_auto_generate(
             render_ok=True,
             run_id=run_id,
             run_dir=run_dir,
+            render_profile=render_profile,
             video_url=video_resp.video_url,
             subtitles_url=video_resp.subtitles_url,
         )
@@ -3835,11 +3851,14 @@ async def generate_video(payload: VideoGenerationRequest, request: Request):
             except Exception as e:
                 print(f"  ⚠️ Erro ao processar imagem de referência: {e}")
         
+        render_profile = "test" if test_mode else "production"
+        render_cfg = get_render_settings(render_profile)
+
         # 5. Gerar imagens (modo images x modo layers)
         if (payload.mode or "images").lower() == "layers":
             # Render local por assets (avatar + props)
             image_paths = await asyncio.wait_for(
-                service_generate_layer_images(scenes_to_process),
+                service_generate_layer_images(scenes_to_process, render_cfg=render_cfg),
                 timeout=360,
             )
         else:
@@ -3870,8 +3889,6 @@ async def generate_video(payload: VideoGenerationRequest, request: Request):
         is_layers = (payload.mode or "images").lower() == "layers"
         min_bytes_quality = 100_000 if is_layers else 150_000
         min_seconds_quality = 3.0 if (is_layers and len(scenes_to_process) <= 3) else 8.0
-        render_cfg = get_render_settings()
-        
         for render_attempt in range(2):
             try:
                 render_result = await asyncio.wait_for(
@@ -3880,6 +3897,7 @@ async def generate_video(payload: VideoGenerationRequest, request: Request):
                         audio_path,
                         scenes_to_process,
                         static_base_url=get_public_static_base_url(request),
+                        render_cfg=render_cfg,
                     ),
                     timeout=900,
                 )
