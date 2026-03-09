@@ -685,6 +685,16 @@ def _trim_spoken_text(text: str, max_chars: int = 135) -> str:
     return chosen
 
 
+def _split_sentences_loose(text: str) -> list[str]:
+    normalized = _clean_caption_text(text)
+    if not normalized:
+        return []
+    parts = [part.strip(" ,;:-") for part in re.split(r"(?<=[.!?])\s+", normalized) if part.strip()]
+    if parts:
+        return parts
+    return [normalized]
+
+
 def _prepare_tts_scene_text(scene: Scene | dict) -> str:
     if isinstance(scene, dict):
         raw = scene.get("texto_narracao") or scene.get("description") or ""
@@ -748,25 +758,50 @@ def _tighten_short_form_scenes(scenes: List[Scene], target_duration_sec: float, 
         return scenes
 
     target_scene_count = _short_form_scene_target_count(target_duration_sec, aggressive=aggressive)
-    selected = list(scenes[:target_scene_count])
-    scene_duration = round(float(target_duration_sec) / max(len(selected), 1), 1)
+    target_scene_count = min(target_scene_count, max(1, len(scenes)))
+    scene_duration = round(float(target_duration_sec) / max(target_scene_count, 1), 1)
     scene_duration = max(3.0, min(6.0, scene_duration))
-    max_chars = 100 if aggressive else 128
-    caption_chars = 44 if aggressive else 50
+    max_chars = 88 if aggressive else 118
+    caption_chars = 34 if aggressive else 40
+
+    all_sentences: list[str] = []
+    for scene in scenes:
+        raw_text = scene.get_narration or scene.description or ""
+        for sentence in _split_sentences_loose(raw_text):
+            trimmed = _trim_spoken_text(sentence, max_chars=max_chars)
+            if trimmed:
+                all_sentences.append(trimmed)
+
+    if not all_sentences:
+        return scenes[:target_scene_count]
+
+    chunk_count = min(target_scene_count, len(all_sentences))
+    sentence_chunks: list[list[str]] = [[] for _ in range(chunk_count)]
+    for idx, sentence in enumerate(all_sentences):
+        bucket = min(chunk_count - 1, int(idx * chunk_count / max(len(all_sentences), 1)))
+        sentence_chunks[bucket].append(sentence)
+
+    selected: List[Scene] = []
+    for idx in range(chunk_count):
+        source_index = min(len(scenes) - 1, round(idx * (len(scenes) - 1) / max(chunk_count - 1, 1)))
+        selected.append(scenes[source_index])
 
     tightened: List[Scene] = []
     for idx, scene in enumerate(selected, start=1):
         sc = scene.model_copy(deep=True)
-        raw_text = sc.get_narration or sc.description or ""
-        trimmed = _trim_spoken_text(raw_text, max_chars=max_chars)
+        joined = " ".join(sentence_chunks[idx - 1]).strip()
+        trimmed = _trim_spoken_text(joined, max_chars=max_chars)
         if not trimmed:
-            trimmed = _trim_spoken_text(raw_text or f"Cena {idx}.", max_chars=max_chars)
+            raw_text = sc.get_narration or sc.description or f"Cena {idx}."
+            trimmed = _trim_spoken_text(raw_text, max_chars=max_chars)
         beat = (sc.beat or _infer_scene_beat(trimmed, idx - 1, len(selected), short_form=True)).strip().lower() or "proof"
         sc.id = idx
         sc.texto_narracao = trimmed
         sc.duracao_estimada = scene_duration
+        sc.tipo_transicao = "cut"
+        sc.motion = "cut"
         sc.beat = beat
-        sc.caption_line = _derive_caption_line(sc.caption_line or trimmed, max_chars=caption_chars)
+        sc.caption_line = _derive_caption_line(trimmed, max_chars=caption_chars)
         sc.pose_family = sc.pose_family or beat
         sc.prop_family = sc.prop_family or beat
         tightened.append(sc)
@@ -2936,7 +2971,7 @@ def _clean_caption_text(text: str) -> str:
     return text
 
 
-def _caption_for_scene(scene: Scene, max_chars: int = 54) -> str:
+def _caption_for_scene(scene: Scene, max_chars: int = 40) -> str:
     """CapCut-ish: 1 linha, curta, pegando o melhor pedaço da fala da cena."""
     raw = _clean_caption_text((scene.caption_line if scene else "") or (scene.get_narration if scene else ""))
     if not raw:
@@ -3012,31 +3047,40 @@ def _render_caption_png(text: str, out_path: str, size=(1280, 720)) -> str:
     draw = ImageDraw.Draw(img)
 
     # Fonte padrão do sistema (Ubuntu)
-    font = None
+    font_path = None
     for fp in [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ]:
-        try:
-            if os.path.exists(fp):
-                font = ImageFont.truetype(fp, 54)
-                break
-        except Exception:
-            continue
-    if font is None:
-        font = ImageFont.load_default()
+        if os.path.exists(fp):
+            font_path = fp
+            break
 
     # garante 1 linha (sem wrap). se estourar, corta.
-    max_chars = 54
+    max_chars = 40 if W <= 960 else 46
     if len(text) > max_chars:
         text = text[: max_chars - 1].rstrip() + "…"
 
-    # posição: centro inferior com padding
-    bbox = draw.textbbox((0, 0), text, font=font, stroke_width=6)
+    font_size = max(26, int(H * 0.048))
+    min_font_size = max(20, int(H * 0.038))
+    font = ImageFont.load_default()
+    while True:
+        if font_path:
+            try:
+                font = ImageFont.truetype(font_path, font_size)
+            except Exception:
+                font = ImageFont.load_default()
+        bbox = draw.textbbox((0, 0), text, font=font, stroke_width=max(4, int(font_size * 0.12)))
+        tw = bbox[2] - bbox[0]
+        if tw <= int(W * 0.82) or font_size <= min_font_size:
+            break
+        font_size -= 2
+
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
     x = int((W - tw) / 2)
-    y = max(0, int(H * 0.87 - (th / 2)))
+    y = max(0, int(H * 0.80 - (th / 2)))
+    stroke_width = max(4, int(font_size * 0.12))
 
     # stroke (preto) + fill (branco)
     draw.text(
@@ -3044,7 +3088,7 @@ def _render_caption_png(text: str, out_path: str, size=(1280, 720)) -> str:
         text,
         font=font,
         fill=(255, 255, 255, 255),
-        stroke_width=8,
+        stroke_width=stroke_width,
         stroke_fill=(0, 0, 0, 220),
     )
 
